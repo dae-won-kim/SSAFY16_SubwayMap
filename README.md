@@ -326,21 +326,6 @@ Vite
 
 ---
 
-### HTTP 상태 코드 요약
-
-| 코드 | 의미 |
-|------|------|
-| `200` | 성공 |
-| `201` | 생성 완료 |
-| `400` | 잘못된 요청 (유효성 실패) |
-| `403` | 비밀번호 불일치 |
-| `404` | 리소스 없음 |
-| `429` | OpenAI API 한도 초과 |
-| `500` | 서버 내부 오류 |
-
-<br>
-
----
 
 ## 🗄️ DB 스키마
 
@@ -746,19 +731,6 @@ Environment   : OPENAI_API_KEY / DATABASE_URL / ALLOWED_ORIGINS
 
 ---
 
-## 👥 팀원
-
-| 이름 | 역할 |
-|------|------|
-| ○○○ | PM / 기획 / 문서화 |
-| ○○○ | Backend (FastAPI · SQLite) |
-| ○○○ | Frontend (Vue 3 · Pinia) |
-| ○○○ | Backend / 챗봇 (OpenAI API) |
-| ○○○ | Frontend / 배포 (Netlify · Render) |
-
-<br>
-
----
 
 ## 📜 라이선스 / 저작권
 
