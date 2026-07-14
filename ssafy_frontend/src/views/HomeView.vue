@@ -1,0 +1,336 @@
+<script setup>
+import { useRouter } from 'vue-router'
+import LayoutBase from '@/components/LayoutBase.vue'
+
+const router = useRouter()
+
+const features = [
+  {
+    id: 1,
+    icon: '🚇',
+    title: '역세권 관광지 검색',
+    description: '지하철역 이름을 입력하면 근처 1km 내 관광지를 한눈에 확인할 수 있습니다.',
+    action: () => router.push('/attractions')
+  },
+  {
+    id: 2,
+    icon: '💬',
+    title: '익명 정보 공유',
+    description: '회원가입 없이 지유롭게 궁금한 점을 나누는 익명 커뮤니티입니다.',
+    action: () => router.push('/posts')
+  },
+  {
+    id: 3,
+    icon: '🤖',
+    title: 'AI 챗봇 비서',
+    description: '궁금한 점을 AI가 답해줄거에요. 즉시 맞춤정보를 얻을 수 있습니다.',
+    action: () => alert('챗봇 기능은 준비 중입니다.')
+  }
+]
+</script>
+
+<template>
+  <LayoutBase>
+    <div class="home-view">
+      <!-- 배너 섹션 -->
+      <section class="banner">
+        <div class="banner-content">
+          <h1 class="banner-title">
+            서울의 숨겨진 핫플<br />
+            지하철역 중심으로 찾다
+          </h1>
+          <p class="banner-subtitle">
+            한국관광공사 데이터 기반 783개의 서울 관광지 탐색 + 익명 커뮤니티
+          </p>
+          <button class="banner-btn" @click="router.push('/attractions')">
+            지금 탐색하기 →
+          </button>
+        </div>
+        <div class="banner-background">
+          <div class="location-icon">📍</div>
+        </div>
+      </section>
+
+      <!-- 3가지 기능 소개 -->
+      <section class="features">
+        <h2 class="section-title">LocalHub의 3가지 특징</h2>
+        <div class="features-grid">
+          <div
+            v-for="feature in features"
+            :key="feature.id"
+            class="feature-card"
+            @click="feature.action"
+          >
+            <div class="feature-icon">{{ feature.icon }}</div>
+            <h3 class="feature-title">{{ feature.title }}</h3>
+            <p class="feature-description">{{ feature.description }}</p>
+            <div class="feature-arrow">→</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 데이터 통계 -->
+      <section class="stats">
+        <h2 class="section-title">LocalHub 데이터 현황</h2>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-number">783</div>
+            <div class="stat-label">관광지 데이터</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">25</div>
+            <div class="stat-label">자치구</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">4</div>
+            <div class="stat-label">카테고리</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number">91.7%</div>
+            <div class="stat-label">이미지 보유율</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA 섹션 -->
+      <section class="cta">
+        <h2>지금 바로 시작해보세요</h2>
+        <p>가장 가까운 지하철역에서 찾을 수 있는 숨은 명소들을 발견하세요.</p>
+        <button class="cta-btn" @click="router.push('/attractions')">
+          지하철역으로 검색하기
+        </button>
+      </section>
+    </div>
+  </LayoutBase>
+</template>
+
+<style scoped>
+.home-view {
+  width: 100%;
+}
+
+/* 배너 섹션 */
+.banner {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: white;
+  padding: 80px 40px;
+  border-radius: 12px;
+  margin-bottom: 60px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.banner-background {
+  position: absolute;
+  right: -50px;
+  bottom: -50px;
+  opacity: 0.1;
+}
+
+.location-icon {
+  font-size: 300px;
+}
+
+.banner-content {
+  flex: 1;
+  z-index: 1;
+}
+
+.banner-title {
+  font-size: 44px;
+  font-weight: 700;
+  margin: 0 0 20px 0;
+  line-height: 1.4;
+}
+
+.banner-subtitle {
+  font-size: 16px;
+  opacity: 0.95;
+  margin: 0 0 30px 0;
+  line-height: 1.6;
+}
+
+.banner-btn {
+  padding: 14px 32px;
+  background-color: white;
+  color: #17a2b8;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.banner-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* 기능 섹션 */
+.features {
+  margin-bottom: 80px;
+}
+
+.section-title {
+  font-size: 32px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 50px 0;
+  color: #333;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+}
+
+.feature-card {
+  background: white;
+  padding: 40px 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.feature-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-4px);
+  border-color: #17a2b8;
+}
+
+.feature-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.feature-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: #333;
+}
+
+.feature-description {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 20px 0;
+  line-height: 1.6;
+}
+
+.feature-arrow {
+  font-size: 24px;
+  color: #17a2b8;
+  font-weight: 600;
+  transition: transform 0.3s ease;
+}
+
+.feature-card:hover .feature-arrow {
+  transform: translateX(8px);
+}
+
+/* 통계 섹션 */
+.stats {
+  background-color: #f8f9fa;
+  padding: 60px 40px;
+  border-radius: 12px;
+  margin-bottom: 80px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 40px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 44px;
+  font-weight: 700;
+  color: #17a2b8;
+  margin-bottom: 10px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+/* CTA 섹션 */
+.cta {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: white;
+  padding: 60px 40px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.cta h2 {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+}
+
+.cta p {
+  font-size: 16px;
+  opacity: 0.95;
+  margin: 0 0 30px 0;
+}
+
+.cta-btn {
+  padding: 14px 40px;
+  background-color: white;
+  color: #17a2b8;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .banner {
+    padding: 50px 30px;
+    flex-direction: column;
+  }
+
+  .banner-title {
+    font-size: 32px;
+  }
+
+  .banner-background {
+    display: none;
+  }
+
+  .section-title {
+    font-size: 24px;
+    margin-bottom: 40px;
+  }
+
+  .features-grid {
+    gap: 20px;
+  }
+
+  .stats-grid {
+    gap: 30px;
+  }
+}
+</style>

@@ -1,0 +1,135 @@
+<script setup>
+defineProps({
+  attraction: {
+    type: Object,
+    required: true
+  },
+  distance: {
+    type: Number,
+    default: null
+  }
+})
+
+const getDefaultImage = () => {
+  return 'https://via.placeholder.com/300x200?text=No+Image'
+}
+
+const formatAddress = (addr) => {
+  return addr.split(' ').slice(0, 3).join(' ')
+}
+</script>
+
+<template>
+  <div class="attraction-card">
+    <!-- 이미지 -->
+    <div class="card-image">
+      <img
+        :src="attraction.first_image || getDefaultImage()"
+        :alt="attraction.title"
+        @error="(e) => (e.target.src = getDefaultImage())"
+      />
+      <div v-if="distance" class="distance-badge">
+        {{ Math.round(distance * 100) / 100 }} km
+      </div>
+    </div>
+
+    <!-- 콘텐츠 -->
+    <div class="card-content">
+      <h3 class="title">{{ attraction.title }}</h3>
+      <p class="address">
+        📍 {{ formatAddress(attraction.addr1) }}
+      </p>
+      <p class="category">
+        {{ attraction.lcls_systm1 }}
+      </p>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.attraction-card {
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.attraction-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.card-image {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+  background-color: #f0f0f0;
+}
+
+.card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.attraction-card:hover .card-image img {
+  transform: scale(1.05);
+}
+
+.distance-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(23, 162, 184, 0.9);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.card-content {
+  padding: 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.address {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.category {
+  margin: 0;
+  font-size: 11px;
+  color: #17a2b8;
+  font-weight: 500;
+}
+</style>

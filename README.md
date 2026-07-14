@@ -144,7 +144,7 @@ Vite
 │                    Vue 3 SPA (Netlify)                       │
 │  HomeView  AttractionListView  PostListView  ChatbotWidget   │
 └────────────────────┬────────────────────────────────────────┘
-                     │ HTTPS (REST API / JSON)
+                     │ HTTPS (FAST API / JSON)
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                  FastAPI 서버 (Render)                        │
