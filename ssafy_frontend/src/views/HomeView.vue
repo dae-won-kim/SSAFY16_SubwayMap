@@ -1,8 +1,10 @@
 <script setup>
 import { useRouter } from 'vue-router'
+import { useChatStore } from '@/chatbot/chatStore'
 import LayoutBase from '@/components/LayoutBase.vue'
 
 const router = useRouter()
+const chatStore = useChatStore()
 
 const features = [
   {
@@ -24,7 +26,9 @@ const features = [
     icon: '🤖',
     title: 'AI 챗봇 비서',
     description: '궁금한 점을 AI가 답해줄거에요. 즉시 맞춤정보를 얻을 수 있습니다.',
-    action: () => alert('챗봇 기능은 준비 중입니다.')
+    action: () => {
+      chatStore.isOpen = true
+    }
   }
 ]
 </script>

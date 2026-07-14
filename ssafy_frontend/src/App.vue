@@ -1,4 +1,5 @@
 <script setup>
+import ChatbotWidget from '@/chatbot/ChatbotWidget.vue'
 </script>
 
 <template>
@@ -9,6 +10,7 @@
       <router-link to="/posts">Posts</router-link>
     </nav>
     <router-view />
+    <ChatbotWidget />
   </div>
 </template>
 
