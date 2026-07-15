@@ -7,6 +7,7 @@ class Location(Base):
     __tablename__ = "locations"
 
     id = Column(Integer, primary_key=True, index=True)
+    content_id = Column(String, index=True, nullable=True)
     name = Column(String, index=True, nullable=False)
     category = Column(String, index=True)
     gu_name = Column(String, index=True)

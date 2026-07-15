@@ -52,3 +52,20 @@ class PostDetailResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+class AttractionListResponse(BaseModel):
+    id: int
+    content_id: Optional[str] = None
+    name: str
+    category: Optional[str] = None
+    gu_name: Optional[str] = None
+    address: Optional[str] = None
+    mapx: Optional[str] = None
+    mapy: Optional[str] = None
+    description: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+class AttractionDetailResponse(AttractionListResponse):
+    pass

@@ -5,17 +5,66 @@ import urllib.error
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
 import models, schemas
-from database import engine, get_db
+from database import engine, get_db, SessionLocal
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 models.Base.metadata.create_all(bind=engine)
+
+def _extract_gu_name(addr: str) -> Optional[str]:
+    if not addr:
+        return None
+    parts = addr.split()
+    for part in parts:
+        if part.endswith("구"):
+            return part
+    return None
+
+def _seed_attractions_from_json():
+    db = SessionLocal()
+    try:
+        if db.query(models.Location).first():
+            return
+
+        json_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "ssafy_frontend",
+            "public",
+            "data",
+            "서울_관광지.json"
+        )
+
+        if not os.path.exists(json_path):
+            return
+
+        with open(json_path, encoding="utf-8") as f:
+            payload = json.load(f)
+
+        for item in payload.get("items", []):
+            db.add(models.Location(
+                content_id=str(item.get("contentid", "")),
+                name=item.get("title", ""),
+                category="관광지",
+                gu_name=_extract_gu_name(item.get("addr1", "")),
+                address=item.get("addr1", ""),
+                mapx=item.get("mapx", ""),
+                mapy=item.get("mapy", ""),
+                description=item.get("firstimage2", "")
+            ))
+
+        db.commit()
+    finally:
+        db.close()
+
+_seed_attractions_from_json()
 
 app = FastAPI(title="LocalHub REST API Server")
 
@@ -58,16 +107,12 @@ def read_post(post_id: int, db: Session = Depends(get_db)):
     db.refresh(db_post)
     return db_post
 
-# backend/main.py 맨 아래에 추가할 코드
-
-# 3. 댓글 작성 (C)
 @app.post("/api/comments", response_model=schemas.CommentResponse, status_code=status.HTTP_201_CREATED, tags=["Comments"])
 def create_comment(comment: schemas.CommentCreate, post_id: int, db: Session = Depends(get_db)):
-    # 해당 게시글이 실제로 존재하는지 먼저 검증
     db_post = db.query(models.Post).filter(models.Post.id == post_id).first()
     if not db_post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
-        
+
     db_comment = models.Comment(
         post_id=post_id,
         content=comment.content,
@@ -78,7 +123,6 @@ def create_comment(comment: schemas.CommentCreate, post_id: int, db: Session = D
     db.refresh(db_comment)
     return db_comment
 
-# 4. 댓글 삭제 (D)
 @app.delete("/api/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Comments"])
 def delete_comment(comment_id: int, request: schemas.PostDeleteRequest, db: Session = Depends(get_db)):
     db_comment = db.query(models.Comment).filter(models.Comment.id == comment_id).first()
@@ -86,10 +130,47 @@ def delete_comment(comment_id: int, request: schemas.PostDeleteRequest, db: Sess
         raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
     if db_comment.password != request.password:
         raise HTTPException(status_code=403, detail="비밀번호가 일치하지 않습니다.")
-        
+
     db.delete(db_comment)
     db.commit()
     return
+
+@app.get("/api/attractions", response_model=List[schemas.AttractionListResponse])
+def read_attractions(
+    keyword: Optional[str] = None,
+    gu: Optional[str] = None,
+    category: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    query = db.query(models.Location)
+
+    if keyword:
+        kw = f"%{keyword}%"
+        query = query.filter(
+            or_(
+                models.Location.name.like(kw),
+                models.Location.address.like(kw),
+                models.Location.description.like(kw),
+            )
+        )
+
+    if gu:
+        query = query.filter(models.Location.gu_name == gu)
+
+    if category:
+        query = query.filter(models.Location.category == category)
+
+    attractions = query.order_by(models.Location.id.asc()).offset(skip).limit(limit).all()
+    return attractions
+
+@app.get("/api/attractions/{attraction_id}", response_model=schemas.AttractionDetailResponse)
+def read_attraction(attraction_id: int, db: Session = Depends(get_db)):
+    attraction = db.query(models.Location).filter(models.Location.id == attraction_id).first()
+    if not attraction:
+        raise HTTPException(status_code=404, detail="관광지를 찾을 수 없습니다.")
+    return attraction
 
 class ChatRequest(BaseModel):
     message: str
