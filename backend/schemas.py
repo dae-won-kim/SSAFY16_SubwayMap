@@ -15,7 +15,7 @@ class CommentResponse(CommentBase):
     created_at: datetime
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 # --- 게시글 스키마 ---
 class PostBase(BaseModel):
@@ -40,7 +40,7 @@ class PostListResponse(PostBase):
     comment_count: int
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 class PostDetailResponse(BaseModel):
     id: int
@@ -51,4 +51,4 @@ class PostDetailResponse(BaseModel):
     comments: List[CommentResponse] = []
 
     class Config:
-        from_attributes = True
+        orm_mode = True
