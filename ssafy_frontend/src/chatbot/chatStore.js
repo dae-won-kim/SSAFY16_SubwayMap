@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { useDataStore } from '../stores/dataStore'
 import { useCommonStore } from '../stores/commonStore'
-import { fetchGeminiResponse } from './chatService'
+import { fetchChatbotResponse } from './chatService'
 
 export const useChatStore = defineStore('chat', () => {
   const CHAT_HISTORY_KEY = 'localhub-chat-history'
@@ -192,21 +192,23 @@ export const useChatStore = defineStore('chat', () => {
       }))
 
       // 5. Gemini API 호출
-      const aiReply = await fetchGeminiResponse(finalPrompt, apiHistory)
-
+      const result = await fetchChatbotResponse(finalPrompt, apiHistory)
+      const aiReply = result.reply || '응답을 받지 못했습니다.'
       // 6. 결과 메시지 조립 및 추가
       messages.value.push({
         id: Date.now() + 2,
         role: 'assistant',
         text: aiReply,
         timestamp: new Date(),
-        sources: contextItems.map(item => ({
-          contentid: item.contentid,
-          title: item.title,
-          addr1: item.addr1,
-          firstimage2: item.firstimage2,
-          contentType: item.contentType
-        }))
+        sources: (result.sources && result.sources.length > 0)
+          ? result.sources
+          : contextItems.map(item => ({
+            contentid: item.contentid,
+            title: item.title,
+            addr1: item.addr1,
+            firstimage2: item.firstimage2,
+            contentType: item.contentType
+          }))
       })
 
     } catch (err) {
