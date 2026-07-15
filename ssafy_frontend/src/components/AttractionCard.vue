@@ -14,13 +14,17 @@ const getDefaultImage = () => {
   return 'https://via.placeholder.com/300x200?text=No+Image'
 }
 
-const formatAddress = (addr) => {
+const formatAddress = (addr = '') => {
   return addr.split(' ').slice(0, 3).join(' ')
 }
 </script>
 
 <template>
-  <div class="attraction-card">
+  <router-link
+    class="attraction-card"
+    :to="{ name: 'AttractionDetail', params: { id: attraction.contentid } }"
+    :aria-label="`${attraction.title} 상세보기`"
+  >
     <!-- 이미지 -->
     <div class="card-image">
       <img
@@ -43,7 +47,7 @@ const formatAddress = (addr) => {
         {{ attraction.lcls_systm1 }}
       </p>
     </div>
-  </div>
+  </router-link>
 </template>
 
 <style scoped>
@@ -57,6 +61,13 @@ const formatAddress = (addr) => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+
+.attraction-card:focus-visible {
+  outline: 3px solid rgba(23, 162, 184, 0.35);
+  outline-offset: 3px;
 }
 
 .attraction-card:hover {

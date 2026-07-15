@@ -20,6 +20,16 @@ const DATA_FILES = {
 
 const dataCache = new Map()
 
+function normalizeItem(item) {
+  return {
+    ...item,
+    title: item.title ?? '',
+    addr1: item.addr1 ?? '',
+    first_image: item.first_image ?? item.firstimage ?? '',
+    lcls_systm1: item.lcls_systm1 ?? item.lclsSystm1 ?? ''
+  }
+}
+
 export async function loadData(type) {
   if (dataCache.has(type)) {
     return dataCache.get(type)
@@ -36,7 +46,13 @@ export async function loadData(type) {
       throw new Error(`Failed to load ${type} data`)
     }
 
-    const data = await response.json()
+    const rawData = await response.json()
+    const data = {
+      ...rawData,
+      items: Array.isArray(rawData.items)
+        ? rawData.items.map(normalizeItem)
+        : []
+    }
     dataCache.set(type, data)
     return data
   } catch (error) {

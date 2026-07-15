@@ -29,6 +29,7 @@ import HeaderNav from './HeaderNav.vue'
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  min-width: 0;
   padding: 40px 20px;
 }
 

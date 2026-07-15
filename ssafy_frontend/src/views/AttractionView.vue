@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '@/stores/dataStore'
 import { useCommonStore } from '@/stores/commonStore'
 import LayoutBase from '@/components/LayoutBase.vue'
@@ -10,9 +11,103 @@ import Pagination from '@/components/Pagination.vue'
 
 const dataStore = useDataStore()
 const commonStore = useCommonStore()
+const route = useRoute()
+const router = useRouter()
 
 const currentPage = ref(1)
 const pageSize = 6
+const sortOption = ref('title')
+const sortDirection = ref('asc')
+let isApplyingRoute = false
+
+const firstQueryValue = (value) => {
+  return Array.isArray(value) ? value[0] : value
+}
+
+const buildQuery = () => {
+  const query = {}
+
+  if (commonStore.selectedStation) {
+    query.q = commonStore.selectedStation
+  }
+  if (commonStore.selectedCategory) {
+    query.category = commonStore.selectedCategory
+  }
+  if (sortOption.value !== 'title') {
+    query.sort = sortOption.value
+  }
+  if (sortDirection.value !== 'asc') {
+    query.direction = sortDirection.value
+  }
+  if (currentPage.value > 1) {
+    query.page = String(currentPage.value)
+  }
+
+  return query
+}
+
+const queriesMatch = (left, right) => {
+  const leftEntries = Object.entries(left)
+  const rightEntries = Object.entries(right)
+
+  return leftEntries.length === rightEntries.length &&
+    leftEntries.every(([key, value]) => firstQueryValue(right[key]) === value)
+}
+
+const syncRoute = () => {
+  if (isApplyingRoute) return
+
+  const query = buildQuery()
+  if (!queriesMatch(query, route.query)) {
+    router.push({ name: 'Attractions', query })
+  }
+}
+
+const applyRouteQuery = async (query) => {
+  isApplyingRoute = true
+
+  const category = firstQueryValue(query.category)
+  const querySort = firstQueryValue(query.sort)
+  const direction = firstQueryValue(query.direction)
+  const page = Number.parseInt(firstQueryValue(query.page), 10)
+
+  commonStore.setSelectedStation(firstQueryValue(query.q) || '')
+  commonStore.setSelectedCategory(
+    ['VE', 'HS', 'EX', 'NA'].includes(category) ? category : null
+  )
+  sortOption.value = ['title', 'category'].includes(querySort)
+    ? querySort
+    : 'title'
+  sortDirection.value = direction === 'desc' ? 'desc' : 'asc'
+  currentPage.value = Number.isInteger(page) && page > 0 ? page : 1
+
+  await nextTick()
+  isApplyingRoute = false
+}
+
+watch(
+  () => route.query,
+  (query) => applyRouteQuery(query),
+  { deep: true, immediate: true }
+)
+
+watch(
+  () => [
+    commonStore.selectedCategory,
+    commonStore.selectedStation,
+    sortOption.value,
+    sortDirection.value
+  ],
+  () => {
+    if (isApplyingRoute) return
+    currentPage.value = 1
+    syncRoute()
+  }
+)
+
+watch(currentPage, () => {
+  syncRoute()
+})
 
 onMounted(() => {
   dataStore.loadAllDataAction()
@@ -41,14 +136,34 @@ const filteredAttractions = computed(() => {
   return items
 })
 
+const sortedAttractions = computed(() => {
+  return [...filteredAttractions.value].sort((a, b) => {
+    const getField = (item) => {
+      if (sortOption.value === 'category') {
+        return item.lcls_systm1 || ''
+      }
+      return item.title || ''
+    }
+
+    const aVal = getField(a).toString()
+    const bVal = getField(b).toString()
+    const result = aVal.localeCompare(bVal, 'ko', {
+      numeric: true,
+      sensitivity: 'base'
+    })
+
+    return sortDirection.value === 'asc' ? result : -result
+  })
+})
+
 const totalPages = computed(() => {
-  return Math.ceil(filteredAttractions.value.length / pageSize)
+  return Math.ceil(sortedAttractions.value.length / pageSize)
 })
 
 const paginatedAttractions = computed(() => {
   const start = (currentPage.value - 1) * pageSize
   const end = start + pageSize
-  return filteredAttractions.value.slice(start, end)
+  return sortedAttractions.value.slice(start, end)
 })
 
 const handlePageChange = (page) => {
@@ -58,6 +173,16 @@ const handlePageChange = (page) => {
 
 const handleSearch = () => {
   currentPage.value = 1
+  syncRoute()
+}
+
+const handleSortChange = () => {
+  currentPage.value = 1
+  syncRoute()
+}
+
+const toggleSortDirection = () => {
+  sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
 }
 </script>
 
@@ -65,7 +190,6 @@ const handleSearch = () => {
   <LayoutBase>
     <div class="attraction-view">
       <div class="attraction-container">
-        <!-- 왼쪽 사이드바 -->
         <aside class="sidebar">
           <StationSearch @search="handleSearch" />
           <hr class="divider" />
@@ -76,33 +200,49 @@ const handleSearch = () => {
           </div>
         </aside>
 
-        <!-- 메인 콘텐츠 -->
         <main class="main-content">
-          <!-- 결과 헤더 -->
           <div class="result-header">
-            <h2 class="result-title">검색 결과</h2>
-            <p class="result-count">
-              총 <strong>{{ filteredAttractions.length }}</strong>개의 관광지
-            </p>
+            <div class="result-header-top">
+              <div>
+                <h2 class="result-title">검색 결과</h2>
+                <p class="result-count">
+                  총 <strong>{{ filteredAttractions.length }}</strong>개의 관광지
+                </p>
+              </div>
+
+              <div class="result-controls">
+                <label class="sort-label">
+                  정렬
+                  <select v-model="sortOption" @change="handleSortChange">
+                    <option value="title">이름순</option>
+                    <option value="category">카테고리순</option>
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  class="sort-direction-btn"
+                  @click="toggleSortDirection"
+                >
+                  {{ sortDirection === 'asc' ? '오름차순' : '내림차순' }}
+                </button>
+              </div>
+            </div>
           </div>
 
-          <!-- 로딩 상태 -->
           <div v-if="dataStore.isLoading" class="loading">
             <p>데이터를 불러오는 중입니다...</p>
           </div>
 
-          <!-- 에러 상태 -->
           <div v-else-if="dataStore.error" class="error">
             <p>❌ {{ dataStore.error }}</p>
           </div>
 
-          <!-- 결과 없음 -->
           <div v-else-if="filteredAttractions.length === 0" class="empty">
             <p>검색 결과가 없습니다.</p>
             <p class="empty-hint">다른 키워드나 필터를 시도해보세요.</p>
           </div>
 
-          <!-- 관광지 그리드 -->
           <div v-else class="attractions-grid">
             <AttractionCard
               v-for="attraction in paginatedAttractions"
@@ -111,7 +251,6 @@ const handleSearch = () => {
             />
           </div>
 
-          <!-- 페이지네이션 -->
           <Pagination
             v-if="totalPages > 1"
             :current-page="currentPage"
@@ -127,15 +266,17 @@ const handleSearch = () => {
 <style scoped>
 .attraction-view {
   width: 100%;
+  min-width: 0;
 }
 
 .attraction-container {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
   gap: 40px;
+  width: 100%;
+  min-width: 0;
 }
 
-/* 사이드바 */
 .sidebar {
   background-color: #f9f9f9;
   padding: 30px;
@@ -166,13 +307,65 @@ const handleSearch = () => {
   line-height: 1.5;
 }
 
-/* 메인 콘텐츠 */
 .main-content {
   width: 100%;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .result-header {
   margin-bottom: 30px;
+}
+
+.result-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.result-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.sort-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #333;
+}
+
+.sort-label select {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: white;
+  color: #333;
+  font-size: 14px;
+}
+
+.sort-direction-btn {
+  border: 1px solid #17a2b8;
+  background: #e8f4f8;
+  color: #17a2b8;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.sort-direction-btn:hover {
+  background: #d0eef5;
+  transform: translateY(-1px);
 }
 
 .result-title {
@@ -193,7 +386,6 @@ const handleSearch = () => {
   font-weight: 700;
 }
 
-/* 상태 메시지 */
 .loading,
 .error,
 .empty {
@@ -223,26 +415,34 @@ const handleSearch = () => {
   margin-top: 8px !important;
 }
 
-/* 관광지 그리드 */
 .attractions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 24px;
+  grid-auto-rows: 1fr;
+  align-items: start;
   margin-bottom: 40px;
+  width: 100%;
+  min-width: 0;
 }
 
-/* 반응형 */
+.attractions-grid > * {
+  align-self: stretch;
+}
+
 @media (max-width: 1024px) {
   .attraction-container {
     grid-template-columns: 1fr;
+    gap: 30px;
   }
 
   .sidebar {
     position: static;
+    width: 100%;
   }
 
   .attractions-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
   }
 }
 
@@ -255,8 +455,17 @@ const handleSearch = () => {
     font-size: 20px;
   }
 
+  .result-header-top {
+    align-items: stretch;
+  }
+
+  .result-controls {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .attractions-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-columns: 1fr;
     gap: 16px;
   }
 }

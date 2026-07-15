@@ -1,9 +1,17 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useCommonStore } from '@/stores/commonStore'
 
 const commonStore = useCommonStore()
-const stationInput = ref('')
+const stationInput = ref(commonStore.selectedStation)
+const emit = defineEmits(['search'])
+
+watch(
+  () => commonStore.selectedStation,
+  (station) => {
+    stationInput.value = station
+  }
+)
 
 const popularStations = [
   '홍대입구',
@@ -18,13 +26,15 @@ const popularStations = [
 
 const handleSearch = () => {
   if (stationInput.value.trim()) {
-    commonStore.setSelectedStation(stationInput.value)
+    commonStore.setSelectedStation(stationInput.value.trim())
+    emit('search')
   }
 }
 
 const selectStation = (station) => {
   stationInput.value = station
   commonStore.setSelectedStation(station)
+  emit('search')
 }
 
 const handleKeyup = (e) => {
@@ -91,10 +101,13 @@ const handleKeyup = (e) => {
 .input-wrapper {
   display: flex;
   gap: 8px;
+  min-width: 0;
 }
 
 .search-input {
   flex: 1;
+  width: 100%;
+  min-width: 0;
   padding: 10px 14px;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -109,6 +122,7 @@ const handleKeyup = (e) => {
 }
 
 .search-btn {
+  flex: 0 0 auto;
   padding: 10px 20px;
   background-color: #17a2b8;
   color: white;

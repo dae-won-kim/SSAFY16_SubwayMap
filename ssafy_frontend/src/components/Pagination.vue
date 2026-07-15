@@ -1,5 +1,7 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   currentPage: {
     type: Number,
     required: true
@@ -13,16 +15,16 @@ defineProps({
 const emit = defineEmits(['change'])
 
 const goToPage = (page) => {
-  if (page >= 1 && page <= totalPages) {
+  if (page >= 1 && page <= props.totalPages) {
     emit('change', page)
   }
 }
 
-const getPageNumbers = () => {
+const pageNumbers = computed(() => {
   const pages = []
   const maxVisible = 5
-  let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
-  let end = Math.min(totalPages, start + maxVisible - 1)
+  let start = Math.max(1, props.currentPage - Math.floor(maxVisible / 2))
+  const end = Math.min(props.totalPages, start + maxVisible - 1)
 
   if (end - start < maxVisible - 1) {
     start = Math.max(1, end - maxVisible + 1)
@@ -33,7 +35,7 @@ const getPageNumbers = () => {
   }
 
   return pages
-}
+})
 </script>
 
 <template>
@@ -50,16 +52,16 @@ const getPageNumbers = () => {
     <!-- 페이지 번호 -->
     <div class="pag-numbers">
       <button
-        v-if="getPageNumbers()[0] > 1"
+        v-if="pageNumbers[0] > 1"
         class="pag-btn"
         @click="goToPage(1)"
       >
         1
       </button>
-      <span v-if="getPageNumbers()[0] > 2" class="ellipsis">...</span>
+      <span v-if="pageNumbers[0] > 2" class="ellipsis">...</span>
 
       <button
-        v-for="page in getPageNumbers()"
+        v-for="page in pageNumbers"
         :key="page"
         class="pag-btn"
         :class="{ active: page === currentPage }"
@@ -68,9 +70,9 @@ const getPageNumbers = () => {
         {{ page }}
       </button>
 
-      <span v-if="getPageNumbers()[getPageNumbers().length - 1] < totalPages - 1" class="ellipsis">...</span>
+      <span v-if="pageNumbers[pageNumbers.length - 1] < totalPages - 1" class="ellipsis">...</span>
       <button
-        v-if="getPageNumbers()[getPageNumbers().length - 1] < totalPages"
+        v-if="pageNumbers[pageNumbers.length - 1] < totalPages"
         class="pag-btn"
         @click="goToPage(totalPages)"
       >
@@ -94,12 +96,15 @@ const getPageNumbers = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 20px;
 }
 
 .pag-numbers {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
 }
 
