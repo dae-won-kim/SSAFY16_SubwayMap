@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '@/stores/dataStore'
 import LayoutBase from '@/components/LayoutBase.vue'
 import { getCategoryName } from '@/utils/category'
+import { loadKakaoMapSdk } from '@/utils/kakaoMapLoader'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +20,7 @@ const categoryName = computed(() => getCategoryName(attraction.value?.lcls_systm
 
 let map = null
 let marker = null
+const mapError = ref('')
 
 const createMap = (position) => {
   const container = document.getElementById('kakao-map')
@@ -51,28 +53,33 @@ const geocodeAddress = (address) => {
   })
 }
 
-const renderMap = () => {
+const renderMap = async () => {
   if (!attraction.value) return
+
+  mapError.value = ''
+
+  try {
+    await loadKakaoMapSdk()
+  } catch (error) {
+    mapError.value = error.message
+    console.error('카카오 지도 SDK 로딩 실패:', error)
+    return
+  }
+
+  await nextTick()
 
   const lat = Number(attraction.value.mapy)
   const lng = Number(attraction.value.mapx)
   const address = attraction.value.addr1 || attraction.value.title
 
-  const waitForKakao = () => {
-    if (!window.kakao?.maps) {
-      window.setTimeout(waitForKakao, 100)
-      return
-    }
-
-    if (lat && lng) {
-      const position = new window.kakao.maps.LatLng(lat, lng)
-      createMap(position)
-    } else if (address) {
-      geocodeAddress(address)
-    }
+  if (lat && lng) {
+    const position = new window.kakao.maps.LatLng(lat, lng)
+    createMap(position)
+  } else if (address) {
+    geocodeAddress(address)
+  } else {
+    mapError.value = '표시할 좌표 또는 주소 정보가 없습니다.'
   }
-
-  waitForKakao()
 }
 
 const goBack = () => {
@@ -83,14 +90,16 @@ const goBack = () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (dataStore.attractions.length === 0) {
-    dataStore.loadAllDataAction()
+    await dataStore.loadAllDataAction()
   }
-  renderMap()
+  await renderMap()
 })
 
-watch(attraction, () => {
+watch(() => route.params.id, () => {
+  map = null
+  marker = null
   renderMap()
 })
 </script>
@@ -125,7 +134,10 @@ watch(attraction, () => {
           </dl>
 
           <div class="map-panel">
-            <div id="kakao-map" class="kakao-map"></div>
+            <div v-if="mapError" class="map-error" role="alert">
+              {{ mapError }}
+            </div>
+            <div id="kakao-map" class="kakao-map" :class="{ 'is-hidden': mapError }"></div>
           </div>
         </div>
       </article>
@@ -219,5 +231,21 @@ watch(attraction, () => {
   width: 100%;
   height: 320px;
   border-radius: 12px;
+}
+
+.kakao-map.is-hidden {
+  display: none;
+}
+
+.map-error {
+  display: grid;
+  min-height: 320px;
+  padding: 24px;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff3f3;
+  color: #b42318;
+  line-height: 1.6;
+  text-align: center;
 }
 </style>

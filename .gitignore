@@ -14,3 +14,5 @@ __pycache__/
 backend/__pycache__/c
 .vscode/
 *.toml
+!netlify.toml
+!**/netlify.toml
