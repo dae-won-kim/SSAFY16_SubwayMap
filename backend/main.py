@@ -476,11 +476,13 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
         "content": req.message
     })
 
+    from fastapi.responses import StreamingResponse
+
     payload = {
         "model": "gpt-5-mini",
-        "messages": messages
+        "messages": messages,
+        "stream": True
     }
-
 
     url = "https://api.openai.com/v1/chat/completions"
     data = json.dumps(payload).encode("utf-8")
@@ -489,36 +491,47 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
         "Authorization": f"Bearer {api_key}"
     }
 
-    try:
-        request = urllib.request.Request(
-            url,
-            data=data,
-            headers=headers,
-            method="POST"
-        )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            result = json.loads(response.read().decode("utf-8"))
-
-        text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        return {
-            "reply": text or "응답을 생성하지 못했습니다.",
-            "sources": sources
-        }
-
-    except urllib.error.HTTPError as e:
+    def event_generator():
         try:
-            error_body = e.read().decode("utf-8")
-            return {
-                "reply": f"AI 응답 실패 (HTTP {e.code}): {error_body}",
-                "sources": []
-            }
-        except Exception:
-            return {
-                "reply": f"AI 응답 실패 (HTTP {e.code}): {e.reason}",
-                "sources": []
-            }
-    except Exception as e:
-        return {
-            "reply": f"AI 응답 실패: {e}",
-            "sources": []
-        }
+            request = urllib.request.Request(
+                url,
+                data=data,
+                headers=headers,
+                method="POST"
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+                buffer = b""
+                while True:
+                    chunk = response.read(1024)
+                    if not chunk:
+                        break
+                    buffer += chunk
+                    while b"\n" in buffer:
+                        line, buffer = buffer.split(b"\n", 1)
+                        line_str = line.decode("utf-8").strip()
+                        if not line_str:
+                            continue
+                        if line_str.startswith("data:"):
+                            data_content = line_str[5:].strip()
+                            if data_content == "[DONE]":
+                                break
+                            try:
+                                data_json = json.loads(data_content)
+                                delta = data_json.get("choices", [{}])[0].get("delta", {})
+                                text_chunk = delta.get("content", "")
+                                if text_chunk:
+                                    yield f"data: {json.dumps({'text': text_chunk})}\n\n"
+                            except Exception:
+                                continue
+            yield f"data: {json.dumps({'sources': sources})}\n\n"
+        except urllib.error.HTTPError as e:
+            try:
+                error_body = e.read().decode("utf-8")
+                yield f"data: {json.dumps({'error': f'HTTP Error {e.code}: {error_body}'})}\n\n"
+            except Exception:
+                yield f"data: {json.dumps({'error': f'HTTP Error {e.code}: {e.reason}'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': f'AI 응답 실패: {e}'})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+

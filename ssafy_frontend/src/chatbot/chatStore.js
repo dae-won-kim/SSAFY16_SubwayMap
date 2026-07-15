@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import { fetchChatbotResponse } from './chatService'
 
 export const useChatStore = defineStore('chat', () => {
   const CHAT_HISTORY_KEY = 'localhub-chat-history'
@@ -70,37 +69,125 @@ export const useChatStore = defineStore('chat', () => {
       timestamp: new Date()
     })
 
+    // 첫 요청 전송 시 로딩 상태 활성화 (UI 상의 '...' 타이핑 표시 활성화)
     isLoading.value = true
 
+    const aiMessageId = Date.now() + 2
+    let isAiMessageAdded = false
+
     try {
-      // 2. API에 보낼 히스토리 포맷팅 (텍스트만 전달)
+      // 2. API에 보낼 히스토리 포맷팅 (방금 추가한 사용자 메시지 제외)
       const apiHistory = messages.value.slice(0, -1).map(msg => ({
         role: msg.role,
         text: msg.text
       }))
 
-      // 3. 백엔드 API 호출 (순수한 userText와 대화 히스토리만 전달)
-      const result = await fetchChatbotResponse(userText, apiHistory)
-      const aiReply = result.reply || '응답을 받지 못했습니다.'
-
-      // 4. 결과 메시지 조립 및 추가
-      messages.value.push({
-        id: Date.now() + 2,
-        role: 'assistant',
-        text: aiReply,
-        timestamp: new Date(),
-        sources: result.sources || []
+      // 3. fetch를 이용해 스트리밍 API 호출
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: userText,
+          history: apiHistory
+        })
       })
+
+      if (!response.ok) {
+        throw new Error('챗봇 응답 연결 실패')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      // 4. 청크 조각 실시간 수신 및 파싱
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        
+        // 마지막 미완성 라인은 다음 루프를 위해 버퍼에 유지
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const cleanLine = line.trim()
+          if (cleanLine.startsWith('data:')) {
+            const jsonStr = cleanLine.slice(5).trim()
+            try {
+              const data = JSON.parse(jsonStr)
+              
+              // 텍스트 조각 수신 시점
+              if (data.text) {
+                // 최초 텍스트 청크 도달 시점에 한 번만 AI 답변 객체를 생성하고 '...' 로딩 표시 끔
+                if (!isAiMessageAdded) {
+                  messages.value.push({
+                    id: aiMessageId,
+                    role: 'assistant',
+                    text: '',
+                    timestamp: new Date(),
+                    sources: []
+                  })
+                  isAiMessageAdded = true
+                  isLoading.value = false // 타이핑 바 숨김
+                }
+
+                const targetMsg = messages.value.find(m => m.id === aiMessageId)
+                if (targetMsg) {
+                  targetMsg.text += data.text
+                }
+              }
+              
+              // 최종 연관 출처(sources) 바인딩
+              if (data.sources) {
+                if (!isAiMessageAdded) {
+                  messages.value.push({
+                    id: aiMessageId,
+                    role: 'assistant',
+                    text: '',
+                    timestamp: new Date(),
+                    sources: []
+                  })
+                  isAiMessageAdded = true
+                  isLoading.value = false
+                }
+                const targetMsg = messages.value.find(m => m.id === aiMessageId)
+                if (targetMsg) {
+                  targetMsg.sources = data.sources
+                }
+              }
+
+              // 백엔드 감지 에러
+              if (data.error) {
+                throw new Error(data.error)
+              }
+            } catch (e) {
+              console.error('SSE JSON parsing error:', e)
+            }
+          }
+        }
+      }
 
     } catch (err) {
       console.error('Error sending message:', err)
-      messages.value.push({
-        id: Date.now() + 3,
-        role: 'assistant',
-        text: `죄송합니다. 오류가 발생하여 응답을 가져올 수 없습니다. 😢\n\n오류 내용: *${err.message}*`,
-        timestamp: new Date(),
-        sources: []
-      })
+      if (!isAiMessageAdded) {
+        messages.value.push({
+          id: aiMessageId,
+          role: 'assistant',
+          text: '',
+          timestamp: new Date(),
+          sources: []
+        })
+        isAiMessageAdded = true
+        isLoading.value = false
+      }
+      const targetMsg = messages.value.find(m => m.id === aiMessageId)
+      if (targetMsg) {
+        targetMsg.text = `죄송합니다. 오류가 발생하여 응답을 가져올 수 없습니다. 😢\n\n오류 내용: *${err.message}*`
+      }
     } finally {
       isLoading.value = false
     }
@@ -115,4 +202,6 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage
   }
 })
+
+
 
