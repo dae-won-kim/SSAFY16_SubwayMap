@@ -1,10 +1,19 @@
+import os
+import json
+import urllib.request
+import urllib.error
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+
+from dotenv import load_dotenv
+from pydantic import BaseModel
 
 import models, schemas
 from database import engine, get_db
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -81,3 +90,63 @@ def delete_comment(comment_id: int, request: schemas.PostDeleteRequest, db: Sess
     db.delete(db_comment)
     db.commit()
     return
+
+class ChatRequest(BaseModel):
+    message: str
+    history: Optional[List[dict]] = None
+
+@app.post("/api/chat")
+def chat(req: ChatRequest):
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return {
+            "reply": "GEMINI_API_KEY가 설정되지 않았습니다.",
+            "sources": []
+        }
+
+    contents = []
+
+    for msg in req.history or []:
+        role = "model" if msg.get("role") in {"assistant", "model"} else "user"
+        contents.append({
+            "role": role,
+            "parts": [{"text": msg.get("text", "")}]
+        })
+
+    contents.append({
+        "role": "user",
+        "parts": [{"text": req.message}]
+    })
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 8000
+        }
+    }
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    data = json.dumps(payload).encode("utf-8")
+
+    try:
+        request = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+        text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return {
+            "reply": text or "응답을 생성하지 못했습니다.",
+            "sources": []
+        }
+
+    except Exception as e:
+        return {
+            "reply": f"AI 응답 실패: {e}",
+            "sources": []
+        }
