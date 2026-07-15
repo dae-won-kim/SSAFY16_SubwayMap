@@ -1,4 +1,6 @@
 <script setup>
+import { getCategoryName } from '@/utils/category'
+
 defineProps({
   attraction: {
     type: Object,
@@ -44,7 +46,7 @@ const formatAddress = (addr = '') => {
         📍 {{ formatAddress(attraction.addr1) }}
       </p>
       <p class="category">
-        {{ attraction.lcls_systm1 }}
+        {{ getCategoryName(attraction.lcls_systm1) }}
       </p>
     </div>
   </router-link>
