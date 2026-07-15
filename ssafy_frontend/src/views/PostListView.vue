@@ -26,13 +26,20 @@ const paginatedPosts = computed(() => {
 })
 
 onMounted(() => {
-  postStore.initializeMockPosts()
+  postStore.loadPosts()
 })
 
-const openPasswordModal = (mode, post) => {
-  selectedPost.value = post
+const openPasswordModal = async (mode, postOrId) => {
   modalMode.value = mode
   passwordError.value = ''
+  // postOrId may be a post object (from edit) or an id (from delete)
+  if (postOrId && typeof postOrId === 'object') {
+    selectedPost.value = postOrId
+  } else if (postOrId) {
+    selectedPost.value = await postStore.getPostById(postOrId)
+  } else {
+    selectedPost.value = null
+  }
   modalVisible.value = true
 }
 
@@ -42,12 +49,12 @@ const closePasswordModal = () => {
   passwordError.value = ''
 }
 
-const handlePasswordConfirm = (password) => {
+const handlePasswordConfirm = async (password) => {
   const post = selectedPost.value
   if (!post) return
 
   if (modalMode.value === 'edit') {
-    if (!postStore.authorizeEdit(post.id, password)) {
+    if (!(await postStore.authorizeEdit(post.id, password))) {
       passwordError.value = '비밀번호가 일치하지 않습니다.'
       return
     }
@@ -56,8 +63,8 @@ const handlePasswordConfirm = (password) => {
     return
   }
 
-  if (!postStore.deleteWithPassword(post.id, password)) {
-    passwordError.value = '비밀번호가 일치하지 않습니다.'
+  if (!(await postStore.deleteWithPassword(post.id, password))) {
+    passwordError.value = postStore.error || '게시글 삭제에 실패했습니다.'
     return
   }
 
@@ -90,12 +97,21 @@ const handlePageChange = (page) => {
         수정과 삭제에는 게시글 작성 시 입력한 비밀번호가 필요합니다.
       </div>
 
-      <div class="table-card">
+      <div v-if="postStore.isLoading" class="state-card">
+        게시글을 불러오는 중입니다...
+      </div>
+
+      <div v-else-if="postStore.error" class="state-card error-state">
+        <p>{{ postStore.error }}</p>
+        <button type="button" @click="postStore.loadPosts()">다시 시도</button>
+      </div>
+
+      <div v-else class="table-card">
         <PostTable
           :posts="paginatedPosts"
           @view="router.push({ name: 'PostDetail', params: { id: $event.id } })"
           @edit="openPasswordModal('edit', $event)"
-          @delete="openPasswordModal('delete', postStore.getPostById($event))"
+              @delete="openPasswordModal('delete', $event)"
         />
       </div>
 
@@ -166,6 +182,28 @@ const handlePageChange = (page) => {
   border: 1px solid #eee;
   border-radius: 12px;
   background: white;
+}
+
+.state-card {
+  padding: 60px 20px;
+  border-radius: 12px;
+  background: #f8f9fa;
+  color: #666;
+  text-align: center;
+}
+
+.error-state p {
+  margin-bottom: 16px;
+  color: #c82333;
+}
+
+.error-state button {
+  padding: 9px 16px;
+  border: 1px solid #17a2b8;
+  border-radius: 7px;
+  background: white;
+  color: #138496;
+  cursor: pointer;
 }
 
 @media (max-width: 640px) {

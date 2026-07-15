@@ -107,6 +107,32 @@ def read_post(post_id: int, db: Session = Depends(get_db)):
     db.refresh(db_post)
     return db_post
 
+@app.put("/api/posts/{post_id}", response_model=schemas.PostDetailResponse)
+def update_post(post_id: int, post: schemas.PostUpdate, db: Session = Depends(get_db)):
+    db_post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not db_post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    if db_post.password != post.password:
+        raise HTTPException(status_code=403, detail="비밀번호가 일치하지 않습니다.")
+
+    db_post.title = post.title
+    db_post.content = post.content
+    db.commit()
+    db.refresh(db_post)
+    return db_post
+
+@app.delete("/api/posts/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_post(post_id: int, request: schemas.PostDeleteRequest, db: Session = Depends(get_db)):
+    db_post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not db_post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    if db_post.password != request.password:
+        raise HTTPException(status_code=403, detail="비밀번호가 일치하지 않습니다.")
+
+    db.delete(db_post)
+    db.commit()
+    return
+
 @app.post("/api/comments", response_model=schemas.CommentResponse, status_code=status.HTTP_201_CREATED, tags=["Comments"])
 def create_comment(comment: schemas.CommentCreate, post_id: int, db: Session = Depends(get_db)):
     db_post = db.query(models.Post).filter(models.Post.id == post_id).first()

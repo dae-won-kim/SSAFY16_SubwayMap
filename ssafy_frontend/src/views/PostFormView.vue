@@ -14,16 +14,13 @@ const canLeave = ref(false)
 const form = ref({
   title: '',
   content: '',
-  category: '질문',
   password: ''
 })
 
-onMounted(() => {
-  postStore.initializeMockPosts()
-
+onMounted(async () => {
   if (!isEditMode.value) return
 
-  const post = postStore.getPostById(route.params.id)
+  const post = await postStore.getPostById(route.params.id)
   if (!post) {
     canLeave.value = true
     router.replace({ name: 'Posts' })
@@ -39,7 +36,6 @@ onMounted(() => {
   form.value = {
     title: post.title,
     content: post.content,
-    category: post.category,
     password: ''
   }
 })
@@ -58,16 +54,16 @@ const validate = () => {
   return ''
 }
 
-const submit = () => {
+const submit = async () => {
   formError.value = validate()
   if (formError.value) return
 
   isSubmitting.value = true
 
   if (isEditMode.value) {
-    const updated = postStore.updateAuthorizedPost(route.params.id, form.value)
+    const updated = await postStore.updateAuthorizedPost(route.params.id, form.value)
     if (!updated) {
-      formError.value = '수정 권한을 확인할 수 없습니다. 목록에서 다시 시도해주세요.'
+      formError.value = postStore.error || '게시글 수정에 실패했습니다.'
       isSubmitting.value = false
       return
     }
@@ -76,7 +72,12 @@ const submit = () => {
     return
   }
 
-  const createdPost = postStore.createPost(form.value)
+  const createdPost = await postStore.createPost(form.value)
+  if (!createdPost) {
+    formError.value = postStore.error || '게시글 생성에 실패했습니다.'
+    isSubmitting.value = false
+    return
+  }
   canLeave.value = true
   router.push({ name: 'PostDetail', params: { id: createdPost.id } })
 }
@@ -108,15 +109,7 @@ const submit = () => {
           />
         </div>
 
-        <div class="form-group">
-          <label for="post-category">분류</label>
-          <select id="post-category" v-model="form.category">
-            <option value="질문">질문</option>
-            <option value="공유">공유</option>
-            <option value="정보">정보</option>
-            <option value="기타">기타</option>
-          </select>
-        </div>
+        <!-- category removed for anonymous board -->
 
         <div class="form-group">
           <label for="post-content">내용</label>

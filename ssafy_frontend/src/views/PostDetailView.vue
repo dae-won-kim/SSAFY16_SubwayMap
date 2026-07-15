@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePostStore } from '@/stores/postStore'
 import LayoutBase from '@/components/LayoutBase.vue'
@@ -11,7 +11,7 @@ const postStore = usePostStore()
 const modalMode = ref('edit')
 const modalVisible = ref(false)
 const passwordError = ref('')
-const post = computed(() => postStore.getPostById(route.params.id))
+const post = ref(null)
 
 const formatDate = (date) => {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -23,9 +23,8 @@ const formatDate = (date) => {
   }).format(new Date(date))
 }
 
-onMounted(() => {
-  postStore.initializeMockPosts()
-  postStore.incrementViews(route.params.id)
+onMounted(async () => {
+  post.value = await postStore.getPostById(route.params.id)
 })
 
 const openPasswordModal = (mode) => {
@@ -39,11 +38,11 @@ const closePasswordModal = () => {
   passwordError.value = ''
 }
 
-const handlePasswordConfirm = (password) => {
+const handlePasswordConfirm = async (password) => {
   if (!post.value) return
 
   if (modalMode.value === 'edit') {
-    if (!postStore.authorizeEdit(post.value.id, password)) {
+    if (!(await postStore.authorizeEdit(post.value.id, password))) {
       passwordError.value = '비밀번호가 일치하지 않습니다.'
       return
     }
@@ -52,8 +51,8 @@ const handlePasswordConfirm = (password) => {
     return
   }
 
-  if (!postStore.deleteWithPassword(post.value.id, password)) {
-    passwordError.value = '비밀번호가 일치하지 않습니다.'
+  if (!(await postStore.deleteWithPassword(post.value.id, password))) {
+    passwordError.value = postStore.error || '게시글 삭제에 실패했습니다.'
     return
   }
   closePasswordModal()
@@ -68,9 +67,17 @@ const handlePasswordConfirm = (password) => {
         ← 게시글 목록
       </router-link>
 
-      <article v-if="post" class="post-card">
+      <div v-if="postStore.isLoading" class="not-found">
+        게시글을 불러오는 중입니다...
+      </div>
+
+      <div v-else-if="postStore.error" class="not-found error-state">
+        <h1>게시글을 불러오지 못했습니다.</h1>
+        <p>{{ postStore.error }}</p>
+      </div>
+
+      <article v-else-if="post" class="post-card">
         <header class="post-header">
-          <span class="category">{{ post.category }}</span>
           <h1>{{ post.title }}</h1>
           <div class="metadata">
             <span>{{ formatDate(post.createdAt) }}</span>
@@ -131,15 +138,7 @@ const handlePasswordConfirm = (password) => {
   border-bottom: 1px solid #eee;
 }
 
-.category {
-  display: inline-block;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #e8f4f8;
-  color: #138496;
-  font-size: 12px;
-  font-weight: 700;
-}
+
 
 .post-header h1 {
   margin: 16px 0;
@@ -193,6 +192,10 @@ const handlePasswordConfirm = (password) => {
   border-radius: 12px;
   background: #f8f9fa;
   text-align: center;
+}
+
+.error-state {
+  color: #c82333;
 }
 
 @media (max-width: 640px) {

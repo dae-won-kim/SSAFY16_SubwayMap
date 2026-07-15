@@ -11,7 +11,8 @@ dotenv_path = os.path.join(parent_dir, ".env")
 
 load_dotenv(dotenv_path=dotenv_path)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./localhub.db")
+# default_db_path = os.path.join(current_dir, "localhub.db").replace("\\", "/")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{default_db_path}")
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

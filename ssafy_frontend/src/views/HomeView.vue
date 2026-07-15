@@ -19,7 +19,7 @@ const formatDate = (date) => {
 }
 
 onMounted(() => {
-  postStore.initializeMockPosts()
+  postStore.loadPosts()
 })
 
 const features = [
@@ -104,7 +104,6 @@ const features = [
             :to="{ name: 'PostDetail', params: { id: post.id } }"
             class="recent-post-item"
           >
-            <span class="recent-category">{{ post.category }}</span>
             <strong>{{ post.title }}</strong>
             <span class="recent-date">{{ formatDate(post.createdAt) }}</span>
           </router-link>
@@ -268,11 +267,7 @@ const features = [
   background: #f5fbfc;
 }
 
-.recent-category {
-  color: #17a2b8;
-  font-size: 13px;
-  font-weight: 700;
-}
+
 
 .recent-post-item strong {
   overflow: hidden;

@@ -8,16 +8,6 @@ defineProps({
 
 const emit = defineEmits(['view', 'edit', 'delete'])
 
-const getCategoryBadgeColor = (category) => {
-  const colors = {
-    '질문': '#ff6b6b',
-    '공유': '#4ecdc4',
-    '정보': '#45b7d1',
-    '기타': '#95a5a6'
-  }
-  return colors[category] || '#95a5a6'
-}
-
 const formatDate = (date) => {
   const d = new Date(date)
   const year = d.getFullYear()
@@ -37,7 +27,6 @@ const formatDate = (date) => {
       <thead>
         <tr>
           <th class="col-number">번호</th>
-          <th class="col-category">분류</th>
           <th class="col-title">제목</th>
           <th class="col-date">작성일</th>
           <th class="col-views">조회</th>
@@ -47,14 +36,6 @@ const formatDate = (date) => {
       <tbody>
         <tr v-for="(post, index) in posts" :key="post.id" class="post-row">
           <td class="col-number">{{ index + 1 }}</td>
-          <td class="col-category">
-            <span
-              class="badge"
-              :style="{ backgroundColor: getCategoryBadgeColor(post.category) }"
-            >
-              {{ post.category }}
-            </span>
-          </td>
           <td class="col-title">
             <a href="#" @click.prevent="$emit('view', post)" class="post-link">
               {{ post.title }}
@@ -118,10 +99,6 @@ const formatDate = (date) => {
   text-align: center;
 }
 
-.col-category {
-  width: 80px;
-}
-
 .col-title {
   flex: 1;
 }
@@ -139,15 +116,6 @@ const formatDate = (date) => {
 .col-actions {
   width: 120px;
   text-align: center;
-}
-
-.badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 12px;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .post-link {
