@@ -1,10 +1,12 @@
 <script setup>
 import { ref, onMounted, nextTick, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChatStore } from './chatStore'
 import { useCommonStore } from '../stores/commonStore'
 
 const chatStore = useChatStore()
 const commonStore = useCommonStore()
+const router = useRouter()
 const userInput = ref('')
 const messageListRef = ref(null)
 
@@ -77,8 +79,11 @@ const renderMarkdown = (text) => {
 const handleSourceClick = (source) => {
   if (source.title) {
     commonStore.setSelectedStation(source.title)
-    // 챗봇 닫고 관광지 탭으로 이동할 수 있도록 브로드캐스트
-    alert(`"${source.title}" 장소를 검색 필터로 지정했습니다! 관광지 검색 탭에서 확인해 보세요.`)
+    chatStore.isOpen = false
+    router.push({
+      name: 'Attractions',
+      query: { q: source.title }
+    })
   }
 }
 </script>

@@ -1,19 +1,47 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useDataStore } from '../stores/dataStore'
 import { useCommonStore } from '../stores/commonStore'
 import { fetchGeminiResponse } from './chatService'
 
 export const useChatStore = defineStore('chat', () => {
+  const CHAT_HISTORY_KEY = 'localhub-chat-history'
   const dataStore = useDataStore()
   const commonStore = useCommonStore()
 
   const messages = ref([])
   const isOpen = ref(false)
   const isLoading = ref(false)
+  let historyRestored = false
+
+  const restoreHistory = () => {
+    if (typeof window === 'undefined') return
+    try {
+      const saved = window.sessionStorage.getItem(CHAT_HISTORY_KEY)
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed)) messages.value = parsed
+    } catch (error) {
+      console.warn('Failed to restore chat history:', error)
+      window.sessionStorage.removeItem(CHAT_HISTORY_KEY)
+    }
+  }
+
+  watch(
+    messages,
+    (value) => {
+      if (!historyRestored || typeof window === 'undefined') return
+      window.sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(value))
+    },
+    { deep: true }
+  )
 
   // 기본 인사말 추가
   const initChat = () => {
+    if (!historyRestored) {
+      historyRestored = true
+      restoreHistory()
+    }
     if (messages.value.length === 0) {
       messages.value.push({
         id: Date.now(),
@@ -28,6 +56,9 @@ export const useChatStore = defineStore('chat', () => {
   // 대화 초기화
   const clearHistory = () => {
     messages.value = []
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(CHAT_HISTORY_KEY)
+    }
     initChat()
   }
 

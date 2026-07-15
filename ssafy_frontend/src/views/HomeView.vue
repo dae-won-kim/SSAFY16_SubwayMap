@@ -1,10 +1,26 @@
 <script setup>
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from '@/chatbot/chatStore'
+import { usePostStore } from '@/stores/postStore'
 import LayoutBase from '@/components/LayoutBase.vue'
 
 const router = useRouter()
 const chatStore = useChatStore()
+const postStore = usePostStore()
+
+const recentPosts = computed(() => postStore.posts.slice(0, 5))
+
+const formatDate = (date) => {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date(date))
+}
+
+onMounted(() => {
+  postStore.initializeMockPosts()
+})
 
 const features = [
   {
@@ -70,6 +86,28 @@ const features = [
             <p class="feature-description">{{ feature.description }}</p>
             <div class="feature-arrow">→</div>
           </div>
+        </div>
+      </section>
+
+      <section class="recent-posts">
+        <div class="section-heading-row">
+          <h2 class="section-title">최근 지역 이야기</h2>
+          <router-link :to="{ name: 'Posts' }" class="more-link">
+            전체 게시글 보기 →
+          </router-link>
+        </div>
+
+        <div class="recent-post-list">
+          <router-link
+            v-for="post in recentPosts"
+            :key="post.id"
+            :to="{ name: 'PostDetail', params: { id: post.id } }"
+            class="recent-post-item"
+          >
+            <span class="recent-category">{{ post.category }}</span>
+            <strong>{{ post.title }}</strong>
+            <span class="recent-date">{{ formatDate(post.createdAt) }}</span>
+          </router-link>
         </div>
       </section>
 
@@ -177,6 +215,75 @@ const features = [
 /* 기능 섹션 */
 .features {
   margin-bottom: 80px;
+}
+
+.recent-posts {
+  margin-bottom: 80px;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.section-heading-row .section-title {
+  margin-bottom: 0;
+  text-align: left;
+}
+
+.more-link {
+  flex: 0 0 auto;
+  color: #138496;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.recent-post-list {
+  overflow: hidden;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  background: white;
+}
+
+.recent-post-item {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr) 70px;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+  color: #333;
+  text-decoration: none;
+}
+
+.recent-post-item:last-child {
+  border-bottom: 0;
+}
+
+.recent-post-item:hover {
+  background: #f5fbfc;
+}
+
+.recent-category {
+  color: #17a2b8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recent-post-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-date {
+  color: #999;
+  font-size: 12px;
+  text-align: right;
 }
 
 .section-title {
@@ -327,6 +434,18 @@ const features = [
   .section-title {
     font-size: 24px;
     margin-bottom: 40px;
+  }
+
+  .section-heading-row {
+    align-items: flex-start;
+  }
+
+  .recent-post-item {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .recent-date {
+    display: none;
   }
 
   .features-grid {
