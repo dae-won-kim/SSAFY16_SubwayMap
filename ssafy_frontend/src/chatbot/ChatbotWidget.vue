@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from './chatStore'
 import { useCommonStore } from '../stores/commonStore'
@@ -9,9 +9,18 @@ const commonStore = useCommonStore()
 const router = useRouter()
 const userInput = ref('')
 const messageListRef = ref(null)
+const showHistoryPanel = ref(false)
+const showClearConfirm = ref(false)
+const showClearNotice = ref(false)
+let clearNoticeTimer = null
 
 onMounted(() => {
   chatStore.initChat()
+  chatStore.loadSessions()
+})
+
+onBeforeUnmount(() => {
+  if (clearNoticeTimer) clearTimeout(clearNoticeTimer)
 })
 
 // 메시지 추가 시 자동 스크롤
@@ -53,6 +62,43 @@ const handleSend = () => {
 
 const toggleChat = () => {
   chatStore.isOpen = !chatStore.isOpen
+  if (!chatStore.isOpen) {
+    showClearConfirm.value = false
+  }
+}
+
+const requestClearHistory = () => {
+  if (chatStore.isLoading) return
+  showClearConfirm.value = true
+}
+
+const cancelClearHistory = () => {
+  showClearConfirm.value = false
+}
+
+const confirmClearHistory = () => {
+  showClearConfirm.value = false
+  showHistoryPanel.value = false
+  chatStore.clearHistory()
+  showClearNotice.value = true
+
+  if (clearNoticeTimer) clearTimeout(clearNoticeTimer)
+  clearNoticeTimer = setTimeout(() => {
+    showClearNotice.value = false
+    clearNoticeTimer = null
+  }, 1800)
+}
+
+const toggleHistoryPanel = () => {
+  showHistoryPanel.value = !showHistoryPanel.value
+  if (showHistoryPanel.value) {
+    chatStore.loadSessions()
+  }
+}
+
+const handleLoadSession = (sessionId) => {
+  chatStore.loadSession(sessionId)
+  showHistoryPanel.value = false
 }
 
 // 텍스트 마크다운 양식 제거 및 정제 헬퍼
@@ -115,25 +161,89 @@ const handleSourceClick = (source) => {
           </div>
           <div class="chat-header-actions">
             <button
+              v-if="!showHistoryPanel"
               class="chat-action-btn"
-              @click="chatStore.clearHistory"
+              :disabled="chatStore.isLoading"
+              @click="requestClearHistory"
               title="대화 초기화"
             >
               🧹
             </button>
+          
+            <button
+              class="chat-action-btn"
+              @click="toggleHistoryPanel"
+              :title="showHistoryPanel ? '대화창으로 돌아가기' : '이전 기록 보기'"
+            >
+              {{ showHistoryPanel ? '◀' : '📜' }}
+            </button>
+          
             <button class="chat-action-btn close-btn" @click="toggleChat" title="닫기">
               ✕
             </button>
           </div>
         </header>
 
-        <!-- 대화 내역 목록 -->
-        <div ref="messageListRef" class="chat-messages-area">
-          <div
-            v-for="msg in chatStore.messages"
-            :key="msg.id"
-            :class="['chat-bubble-row', msg.role === 'user' ? 'user-row' : 'bot-row']"
-          >
+        <div
+          v-if="showClearConfirm"
+          class="clear-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clear-confirm-title"
+        >
+          <div class="clear-confirm-dialog">
+            <h4 id="clear-confirm-title">대화를 초기화하겠습니까?</h4>
+            <p>현재 대화 내용이 삭제되고 새 대화로 시작합니다.</p>
+            <div class="clear-confirm-actions">
+              <button type="button" class="clear-cancel-btn" @click="cancelClearHistory">
+                취소
+              </button>
+              <button type="button" class="clear-accept-btn" @click="confirmClearHistory">
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="showClearNotice" class="clear-success-notice" role="status">
+          대화가 초기화되었습니다.
+        </div>
+
+        <template v-if="showHistoryPanel">
+          <div class="chat-history-panel">
+            <div class="history-panel-header">
+              <span>이전 기록</span>
+            </div>
+            <ul class="history-list">
+              <li v-if="chatStore.sessions.length === 0" class="history-empty">
+                저장된 이전 기록이 없습니다.
+              </li>
+              <li
+                v-for="session in chatStore.sessions"
+                :key="session.session_id"
+                class="history-item"
+              >
+                <button
+                  class="history-load-btn"
+                  @click="handleLoadSession(session.session_id)"
+                >
+                  {{ session.title || '새 대화' }}
+                </button>
+                <div class="history-meta">
+                  {{ session.updated_at ? new Date(session.updated_at).toLocaleString() : '' }}
+                </div>
+              </li>
+            </ul>
+          </div>
+        </template>
+
+        <template v-else>
+          <div ref="messageListRef" class="chat-messages-area">
+            <div
+              v-for="msg in chatStore.messages"
+              :key="msg.id"
+              :class="['chat-bubble-row', msg.role === 'user' ? 'user-row' : 'bot-row']"
+            >
             <!-- 아바타 -->
             <div v-if="msg.role !== 'user'" class="chat-msg-avatar">🤖</div>
 
@@ -212,6 +322,7 @@ const handleSourceClick = (source) => {
             ✈️
           </button>
         </footer>
+        </template>
       </div>
     </div>
   </div>
@@ -283,6 +394,7 @@ const handleSourceClick = (source) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 /* 헤더 영역 */
@@ -344,6 +456,107 @@ const handleSourceClick = (source) => {
 
 .close-btn {
   font-size: 12px;
+}
+
+.chat-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.clear-confirm-overlay {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.clear-confirm-dialog {
+  width: min(100%, 310px);
+  padding: 24px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
+  text-align: center;
+}
+
+.clear-confirm-dialog h4 {
+  margin: 0 0 10px;
+  color: #222;
+  font-size: 17px;
+}
+
+.clear-confirm-dialog p {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.clear-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.clear-cancel-btn,
+.clear-accept-btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.clear-cancel-btn {
+  border: 1px solid #d7dde5;
+  background: white;
+  color: #495057;
+}
+
+.clear-accept-btn {
+  border: 1px solid #17a2b8;
+  background: #17a2b8;
+  color: white;
+}
+
+.clear-success-notice {
+  position: absolute;
+  z-index: 15;
+  top: 82px;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 40px);
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #173f46;
+  color: white;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+  font-size: 13px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* 세션 목록 */
+.chat-session-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 20px 0;
+  background-color: rgba(248, 249, 250, 0.4);
+}
+
+.chat-session-btn {
+  border: 1px solid #dfe6e9;
+  background: white;
+  color: #2d3436;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 /* 대화 리스트 영역 */
@@ -610,6 +823,62 @@ const handleSourceClick = (source) => {
   30% {
     transform: translateY(-6px);
   }
+}
+
+.chat-history-panel {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  overflow-y: auto;
+}
+
+.history-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-weight: 700;
+  color: #2b2b2b;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-load-btn {
+  flex: 1;
+  text-align: left;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #2d2d2d;
+}
+
+.history-meta {
+  font-size: 11px;
+  color: #6c757d;
+  white-space: nowrap;
+}
+
+.history-empty {
+  padding: 48px 12px;
+  color: #6c757d;
+  text-align: center;
 }
 
 /* 반응형 (모바일 뷰포트) */

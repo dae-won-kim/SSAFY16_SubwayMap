@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import { fetchChatbotResponse } from './chatService'
+import { fetchChatbotResponse, fetchChatSessions, fetchChatSession } from './chatService'
 
 export const useChatStore = defineStore('chat', () => {
   const CHAT_HISTORY_KEY = 'localhub-chat-history'
@@ -8,6 +8,8 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref([])
   const isOpen = ref(false)
   const isLoading = ref(false)
+  const sessions = ref([])
+  const activeSessionId = ref(null)
   let historyRestored = false
 
   const restoreHistory = () => {
@@ -52,17 +54,45 @@ export const useChatStore = defineStore('chat', () => {
   // 대화 초기화
   const clearHistory = () => {
     messages.value = []
+    activeSessionId.value = null
     if (typeof window !== 'undefined') {
       window.sessionStorage.removeItem(CHAT_HISTORY_KEY)
     }
     initChat()
   }
 
+  const loadSessions = async () => {
+    try {
+      sessions.value = await fetchChatSessions()
+    } catch (error) {
+      console.warn('Failed to load chat sessions:', error)
+    }
+  }
+
+  const loadSession = async (sessionId) => {
+    if (!sessionId) return
+    try {
+      const session = await fetchChatSession(sessionId)
+      activeSessionId.value = session.session_id
+      messages.value = (session.messages || []).map((msg) => ({
+        id: msg.id,
+        role: msg.role,
+        text: msg.content,
+        timestamp: msg.created_at,
+        sources: []
+      }))
+    } catch (error) {
+      console.warn('Failed to load chat session:', error)
+    }
+  }
+
   // 메시지 전송
   const sendMessage = async (userText) => {
     if (!userText.trim()) return
 
-    // 1. 사용자 메시지 추가
+    const sessionId = activeSessionId.value || `session-${Date.now()}`
+    activeSessionId.value = sessionId
+
     messages.value.push({
       id: Date.now() + 1,
       role: 'user',
@@ -73,17 +103,15 @@ export const useChatStore = defineStore('chat', () => {
     isLoading.value = true
 
     try {
-      // 2. API에 보낼 히스토리 포맷팅 (텍스트만 전달)
       const apiHistory = messages.value.slice(0, -1).map(msg => ({
         role: msg.role,
-        text: msg.text
+        text: msg.text,
+        session_id: sessionId
       }))
 
-      // 3. 백엔드 API 호출 (순수한 userText와 대화 히스토리만 전달)
-      const result = await fetchChatbotResponse(userText, apiHistory)
+      const result = await fetchChatbotResponse(userText, apiHistory, sessionId)
       const aiReply = result.reply || '응답을 받지 못했습니다.'
 
-      // 4. 결과 메시지 조립 및 추가
       messages.value.push({
         id: Date.now() + 2,
         role: 'assistant',
@@ -92,6 +120,7 @@ export const useChatStore = defineStore('chat', () => {
         sources: result.sources || []
       })
 
+      await loadSessions()
     } catch (err) {
       console.error('Error sending message:', err)
       messages.value.push({
@@ -108,11 +137,15 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     messages,
+    sessions,
+    activeSessionId,
     isOpen,
     isLoading,
     initChat,
     clearHistory,
-    sendMessage
+    sendMessage,
+    loadSessions,
+    loadSession
   }
 })
 

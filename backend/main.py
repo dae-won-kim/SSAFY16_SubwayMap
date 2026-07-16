@@ -2,6 +2,7 @@ import os
 import json
 import urllib.request
 import urllib.error
+import uuid
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -211,6 +212,10 @@ def read_attraction(attraction_id: int, db: Session = Depends(get_db)):
 class ChatRequest(BaseModel):
     message: str
     history: Optional[List[dict]] = None
+    session_id: Optional[str] = None
+
+
+
 
 @app.post("/api/chat")
 def chat(req: ChatRequest, db: Session = Depends(get_db)):
@@ -500,9 +505,12 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
             result = json.loads(response.read().decode("utf-8"))
 
         text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+
+
         return {
             "reply": text or "응답을 생성하지 못했습니다.",
-            "sources": sources
+            "sources": sources,
+            "session_id": session_id
         }
 
     except urllib.error.HTTPError as e:

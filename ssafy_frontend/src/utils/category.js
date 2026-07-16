@@ -6,5 +6,5 @@ const CATEGORY_NAMES = {
 }
 
 export function getCategoryName(code) {
-  return CATEGORY_NAMES[code] || '기타'
+  return CATEGORY_NAMES[code] || code || '기타'
 }

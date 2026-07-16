@@ -69,3 +69,35 @@ class AttractionListResponse(BaseModel):
 
 class AttractionDetailResponse(AttractionListResponse):
     pass
+
+
+class ChatMessageSchema(BaseModel):
+    role: str
+    content: str
+    sequence: int
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class ChatSessionSchema(BaseModel):
+    session_id: str
+    title: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    messages: List[ChatMessageSchema] = []
+
+    class Config:
+        orm_mode = True
+
+
+class ChatHistoryRequest(BaseModel):
+    session_id: str
+    message: str
+    role: str = "user"
+
+
+class ChatHistoryResponse(BaseModel):
+    session_id: str
+    reply: str

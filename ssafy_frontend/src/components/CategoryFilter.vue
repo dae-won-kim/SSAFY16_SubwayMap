@@ -1,14 +1,28 @@
 <script setup>
+import { computed } from 'vue'
 import { useCommonStore } from '@/stores/commonStore'
+import { useDataStore } from '@/stores/dataStore'
+import { getCategoryName } from '@/utils/category'
 
 const commonStore = useCommonStore()
+const dataStore = useDataStore()
 
-const categories = [
-  { code: 'VE', label: '자연·경관', icon: '🏞️', count: 353 },
-  { code: 'HS', label: '역사·문화', icon: '🏛️', count: 228 },
-  { code: 'EX', label: '체험·레포츠', icon: '🎢', count: 111 },
-  { code: 'NA', label: '자연생태', icon: '🌿', count: 91 }
-]
+const categories = computed(() => {
+  const counts = new Map()
+
+  dataStore.attractions.forEach(item => {
+    const code = item.lcls_systm1
+    if (!code) return
+    counts.set(code, (counts.get(code) || 0) + 1)
+  })
+
+  return Array.from(counts, ([code, count]) => ({
+    code,
+    label: getCategoryName(code),
+    icon: '📍',
+    count
+  }))
+})
 
 const toggleCategory = (code) => {
   if (commonStore.selectedCategory === code) {

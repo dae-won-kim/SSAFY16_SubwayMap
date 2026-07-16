@@ -73,7 +73,7 @@ const applyRouteQuery = async (query) => {
 
   commonStore.setSelectedStation(firstQueryValue(query.q) || '')
   commonStore.setSelectedCategory(
-    ['VE', 'HS', 'EX', 'NA'].includes(category) ? category : null
+    typeof category === 'string' && category ? category : null
   )
   sortOption.value = ['title', 'category'].includes(querySort)
     ? querySort
