@@ -28,51 +28,24 @@ def _extract_gu_name(addr: str) -> Optional[str]:
     return None
 
 def _seed_attractions_from_json():
+    # 중앙화: import_locations 모듈을 사용해 시드 작업을 위임
     db = SessionLocal()
     try:
-        # 데이터베이스에 관광지 외 다른 카테고리가 섞여있다면 청소 후 재초기화
-        has_other = db.query(models.Location).filter(models.Location.category != "관광지").first()
-        if has_other:
-            db.query(models.Location).delete()
-            db.commit()
-
         if db.query(models.Location).first():
             return
-
-        json_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "ssafy_frontend",
-            "public",
-            "data",
-            "서울_관광지.json"
-        )
-
-        if not os.path.exists(json_path):
-            return
-
-        with open(json_path, encoding="utf-8") as f:
-            payload = json.load(f)
-
-        for item in payload.get("items", []):
-            db.add(models.Location(
-                content_id=str(item.get("contentid", "")),
-                name=item.get("title", ""),
-                category="관광지",
-                gu_name=_extract_gu_name(item.get("addr1", "")),
-                address=item.get("addr1", ""),
-                mapx=item.get("mapx", ""),
-                mapy=item.get("mapy", ""),
-                description=item.get("firstimage2", "")
-            ))
-        db.commit()
-    except Exception as e:
-        print(f"데이터베이스 복구 중 오류 발생: {e}")
-        db.rollback()
     finally:
         db.close()
 
-_seed_attractions_from_json()
+    # import inside function to avoid circular import on module load
+    try:
+        import importlib
+        if __package__:
+            importlib.import_module(f"{__package__}.import_locations").main()
+        else:
+            import import_locations
+            import_locations.main()
+    except Exception as e:
+        print(f"seed via import_locations failed: {e}")
 
 
 
@@ -85,6 +58,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def _on_startup_seed():
+    try:
+        _seed_attractions_from_json()
+    except Exception as e:
+        print(f"seed_on_startup failed: {e}")
 
 @app.post("/api/posts", response_model=schemas.PostDetailResponse, status_code=status.HTTP_201_CREATED)
 def create_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
@@ -205,7 +185,7 @@ def read_attractions(
 def read_attraction(attraction_id: int, db: Session = Depends(get_db)):
     attraction = db.query(models.Location).filter(models.Location.id == attraction_id).first()
     if not attraction:
-        raise HTTPException(status_code=404, detail="관광지를 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="장소를 찾을 수 없습니다.")
     return attraction
 
 class ChatRequest(BaseModel):
@@ -389,31 +369,102 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
                     station_coords = coords
                     break
 
+    # --- 카테고리 키워드 감지 및 우선 카테고리 설정 ---
+    preferred_category = None
+    category_keywords = {
+        "레포츠": "레포츠",
+        "레저": "레포츠",
+        "운동": "레포츠",
+        "헬스": "레포츠",
+        "헬스장": "레포츠",
+        "필라테스": "레포츠",
+        "요가": "레포츠",
+        "수영": "레포츠",
+        "클라이밍": "레포츠",
+        "쇼핑": "쇼핑",
+        "숙박": "숙박",
+        "호텔": "숙박",
+        "문화": "문화시설",
+        "문화시설": "문화시설",
+        "축제": "축제공연행사",
+        "공연": "축제공연행사",
+        "행사": "축제공연행사",
+        "여행코스": "여행코스",
+        "코스": "여행코스"
+    }
+    for k, v in category_keywords.items():
+        if k in query_text:
+            preferred_category = v
+            is_location_query = True
+            break
+    # ----------------------------------------------------
+
     matched_locations = []
 
     # 장소/관광지 정보 탐색 의도가 있는 경우에만 DB 조회 진행
     if is_location_query:
         if station_coords:
             station_lat, station_lng = station_coords
-            all_locations = db.query(models.Location).all()
-            for loc in all_locations:
+            all_q = db.query(models.Location)
+            if preferred_category:
+                all_q = all_q.filter(models.Location.category == preferred_category)
+            all_locations = all_q.all()
+
+            # 점점 반경을 넓혀서 근처 장소를 찾음(1.5km -> 3km -> 5km)
+            radii = [1.5, 3.0, 5.0]
+            found = False
+            for radius in radii:
+                matched_locations = []
+                for loc in all_locations:
+                    try:
+                        loc_lat = float(loc.mapy)
+                        loc_lng = float(loc.mapx)
+                        dist = haversine_distance(station_lat, station_lng, loc_lat, loc_lng)
+                        if dist <= radius:
+                            matched_locations.append((loc, dist))
+                    except (ValueError, TypeError):
+                        continue
+                if matched_locations:
+                    matched_locations.sort(key=lambda x: x[1])
+                    matched_locations = [x[0] for x in matched_locations[:3]]
+                    found = True
+                    break
+
+            # 반경 내에 아무것도 없으면 matched_locations는 빈 상태
+            # (후속 로직에서 gu/keyword 기반 검색으로 넘어감)
+            # 만약 반경 내에 없고 preferred_category가 지정된 상태라면
+            # 1) 역 이름이 주소에 포함된 레코드를 우선 찾아보고
+            # 2) 그래도 없으면 같은 카테고리에서 임의로 상위 3개를 반환
+            if not found and preferred_category and detected_station:
                 try:
-                    loc_lat = float(loc.mapy)
-                    loc_lng = float(loc.mapx)
-                    dist = haversine_distance(station_lat, station_lng, loc_lat, loc_lng)
-                    if dist <= 1.5:
-                        matched_locations.append((loc, dist))
-                except (ValueError, TypeError):
-                    continue
-            matched_locations.sort(key=lambda x: x[1])
-            matched_locations = [x[0] for x in matched_locations[:3]]
+                    station_word = detected_station.replace("역", "")
+                    station_q = db.query(models.Location).filter(models.Location.category == preferred_category).filter(
+                        or_(
+                            models.Location.address.like(f"%{station_word}%"),
+                            models.Location.gu_name.like(f"%{station_word}%")
+                        )
+                    ).limit(3)
+                    matched_locations = station_q.all()
+                    if matched_locations:
+                        # matched_locations currently are Location objects
+                        found = True
+                    else:
+                        # 마지막 수단: 카테고리 내 상위 3개(좌표 무관)
+                        matched_locations = db.query(models.Location).filter(models.Location.category == preferred_category).limit(3).all()
+                        if matched_locations:
+                            found = True
+                except Exception:
+                    pass
 
         if not matched_locations:
             if gu_match:
                 gu_keyword = gu_match.group(1)
-                matched_locations = db.query(models.Location).filter(
+                matched_q = db.query(models.Location).filter(
                     models.Location.gu_name.like(f"%{gu_keyword}%")
-                ).limit(3).all()
+                )
+                if preferred_category:
+                    matched_q = matched_q.filter(models.Location.category == preferred_category)
+                matched_locations = matched_q.limit(3).all()
 
             if not matched_locations:
                 words = [w for w in re.sub(r'[^\w\s]', '', query_text).split() if len(w) >= 2]
@@ -428,16 +479,29 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
                     for w in search_words:
                         filters.append(models.Location.name.like(f"%{w}%"))
                         filters.append(models.Location.address.like(f"%{w}%"))
-                    matched_locations = db.query(models.Location).filter(or_(*filters)).limit(3).all()
+                    search_q = db.query(models.Location).filter(or_(*filters))
+                    if preferred_category:
+                        search_q = search_q.filter(models.Location.category == preferred_category)
+                    matched_locations = search_q.limit(3).all()
 
     context_parts = []
     sources = []
     for loc in matched_locations:
+        # 설명에서 이미지 URL이나 '장소 이미지(참고):' 같은 메타 문구 제거
+        desc_raw = loc.description or ""
+        try:
+            # re is available in this scope (imported earlier in chat)
+            desc = re.sub(r"장소 이미지\(참고\):\s*", "", desc_raw)
+            desc = re.sub(r"https?://\S+", "", desc)
+            desc = desc.strip()
+        except Exception:
+            desc = desc_raw
+
         context_parts.append(
             f"- 장소명: {loc.name}\n"
-            f"  카테고리: {loc.category or '관광지'}\n"
+            f"  카테고리: {loc.category or '기타'}\n"
             f"  주소: {loc.address or ''}\n"
-            f"  설명: {loc.description or ''}"
+            f"  설명: {desc}"
         )
         sources.append({
             "contentid": loc.content_id,
@@ -446,7 +510,7 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
             "address": loc.address
         })
 
-    context_text = "\n\n".join(context_parts) if context_parts else "조회된 데이터베이스 내 관광지 정보가 없습니다."
+    context_text = "\n\n".join(context_parts) if context_parts else "조회된 데이터베이스 내 장소 정보가 없습니다."
 
     system_prompt = (
         "당신은 LocalHub의 서울 관광 안내 인공지능 비서입니다.\n\n"
