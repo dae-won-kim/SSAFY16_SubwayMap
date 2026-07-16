@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from './chatStore'
 import { useCommonStore } from '../stores/commonStore'
@@ -9,6 +9,9 @@ const commonStore = useCommonStore()
 const router = useRouter()
 const userInput = ref('')
 const messageListRef = ref(null)
+const showConvos = ref(false)
+const convoList = ref([])
+const newConvoTitle = ref('')
 
 onMounted(() => {
   chatStore.initChat()
@@ -37,11 +40,42 @@ watch(
 watch(
   () => chatStore.isOpen,
   (val) => {
-    if (val) {
-      scrollToBottom()
-    }
+    if (val) scrollToBottom()
   }
 )
+
+// Save conversation when the entire page is about to be unloaded (tab/window close or refresh)
+const _beforeUnloadHandler = (e) => {
+  try {
+    // prefer the draft backup if available
+    let msgs = []
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY)
+      msgs = raw ? JSON.parse(raw) : (chatStore.messages || [])
+    } catch (ee) {
+      msgs = chatStore.messages || []
+    }
+    if (Array.isArray(msgs) && msgs.length > 1) {
+      const title = (msgs.find(m => m.role === 'user') || {}).text || `대화 ${new Date().toLocaleString()}`
+      saveConversationToLocal(title)
+    }
+  } catch (err) {
+    console.warn('Auto-save on unload failed', err)
+  }
+  // standard: no need to set returnValue unless you want prompt; we just save
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', _beforeUnloadHandler)
+  window.addEventListener('visibilitychange', _visibilityHandler)
+  window.addEventListener('pagehide', _beforeUnloadHandler)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', _beforeUnloadHandler)
+  window.removeEventListener('visibilitychange', _visibilityHandler)
+  window.removeEventListener('pagehide', _beforeUnloadHandler)
+})
 
 const handleSend = () => {
   const text = userInput.value.trim()
@@ -53,6 +87,102 @@ const handleSend = () => {
 
 const toggleChat = () => {
   chatStore.isOpen = !chatStore.isOpen
+}
+
+// Local conversation persistence (localStorage)
+const CONV_KEY = 'localhub-conversations'
+const DRAFT_KEY = 'localhub-chat-draft'
+
+// keep a draft backup so beforeunload can reliably save even if reactive state is in flux
+watch(
+  () => chatStore.messages,
+  (val) => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(DRAFT_KEY, JSON.stringify(val || []))
+      }
+    } catch (e) {
+      console.warn('failed to write draft', e)
+    }
+  },
+  { deep: true }
+)
+
+const _readConvos = () => {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(CONV_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch (e) {
+    console.warn('read convos failed', e)
+    window.localStorage.removeItem(CONV_KEY)
+    return []
+  }
+}
+
+const _writeConvos = (list) => {
+  try {
+    window.localStorage.setItem(CONV_KEY, JSON.stringify(list))
+  } catch (e) {
+    console.error('write convos failed', e)
+  }
+}
+
+const saveConversationToLocal = (title, messagesParam) => {
+  const msgs = Array.isArray(messagesParam) ? messagesParam : (chatStore.messages || [])
+  if (!Array.isArray(msgs) || msgs.length === 0) return
+  const convs = _readConvos()
+  const conv = {
+    id: Date.now(),
+    title: (title || '').slice(0, 200) || `대화 ${new Date().toLocaleString()}`,
+    timestamp: new Date().toISOString(),
+    messages: msgs
+  }
+  convs.unshift(conv)
+  _writeConvos(convs)
+  convoList.value = convs
+}
+
+// Visibility / pagehide handler: save draft when page hidden or unloaded
+const _visibilityHandler = () => {
+  try {
+    if (document.hidden) {
+      let msgs = []
+      try { msgs = JSON.parse(window.localStorage.getItem(DRAFT_KEY) || '[]') } catch (e) { msgs = chatStore.messages || [] }
+      if (Array.isArray(msgs) && msgs.length > 1) {
+        const title = (msgs.find(m => m.role === 'user') || {}).text || `대화 ${new Date().toLocaleString()}`
+        saveConversationToLocal(title, msgs)
+      }
+    }
+  } catch (e) {
+    console.warn('visibility save failed', e)
+  }
+}
+
+const openConvoList = () => {
+  convoList.value = _readConvos()
+  showConvos.value = true
+}
+
+const closeConvoList = () => {
+  showConvos.value = false
+}
+
+const loadConversation = (id) => {
+  const convs = _readConvos()
+  const conv = convs.find(c => c.id === id)
+  if (conv) {
+    chatStore.messages = conv.messages || []
+    // also update sessionStorage so store won't overwrite unexpectedly
+    try { window.sessionStorage.setItem('localhub-chat-history', JSON.stringify(chatStore.messages)) } catch(e){}
+    showConvos.value = false
+  }
+}
+
+const deleteConversation = (id) => {
+  let convs = _readConvos().filter(c => c.id !== id)
+  _writeConvos(convs)
+  convoList.value = convs
 }
 
 // 텍스트 마크다운 양식 제거 및 정제 헬퍼
@@ -121,11 +251,47 @@ const handleSourceClick = (source) => {
             >
               🧹
             </button>
+            <button
+              class="chat-action-btn"
+              @click="openConvoList"
+              title="대화 목록"
+            >
+              🗂️
+            </button>
             <button class="chat-action-btn close-btn" @click="toggleChat" title="닫기">
               ✕
             </button>
           </div>
         </header>
+
+        <!-- 대화 목록 모달 -->
+        <div v-if="showConvos" class="convo-modal-overlay">
+          <div class="convo-modal">
+            <div class="convo-modal-header">
+              <h4>저장된 대화</h4>
+              <button class="chat-action-btn" @click="closeConvoList">✕</button>
+            </div>
+            <div class="convo-modal-body">
+              <div class="convo-save">
+                <input v-model="newConvoTitle" placeholder="대화 제목(선택)" />
+                <button @click="saveConversationToLocal(newConvoTitle)">저장</button>
+              </div>
+              <ul class="convo-list">
+                <li v-for="c in convoList" :key="c.id" class="convo-item">
+                  <div class="convo-meta">
+                    <strong>{{ c.title }}</strong>
+                    <small>{{ new Date(c.timestamp).toLocaleString() }}</small>
+                  </div>
+                  <div class="convo-actions">
+                    <button @click="loadConversation(c.id)">불러오기</button>
+                    <button @click="deleteConversation(c.id)">삭제</button>
+                  </div>
+                </li>
+                <li v-if="convoList.length === 0" class="empty">저장된 대화가 없습니다.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
 
         <!-- 대화 내역 목록 -->
         <div ref="messageListRef" class="chat-messages-area">
@@ -633,4 +799,50 @@ const handleSourceClick = (source) => {
     border: none;
   }
 }
+
+/* 대화 목록 모달 스타일 */
+.convo-modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.convo-modal {
+  width: 320px;
+  max-height: 420px;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.convo-modal-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f6f9fa;
+}
+.convo-modal-body {
+  padding: 12px 16px;
+  overflow-y: auto;
+}
+.convo-save {
+  display:flex;
+  gap:8px;
+  margin-bottom:12px;
+}
+.convo-save input { flex:1; padding:6px 8px; border-radius:6px; border:1px solid #e2e8f0 }
+.convo-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px }
+.convo-item { display:flex; align-items:center; justify-content:space-between; gap:8px }
+.convo-item .convo-meta strong { display:block }
+.convo-actions button { margin-left:6px }
+.convo-item .empty { color:#666 }
+
 </style>

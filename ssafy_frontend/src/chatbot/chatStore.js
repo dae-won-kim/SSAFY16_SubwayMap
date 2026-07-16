@@ -2,41 +2,14 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 export const useChatStore = defineStore('chat', () => {
-  const CHAT_HISTORY_KEY = 'localhub-chat-history'
-
   const messages = ref([])
   const isOpen = ref(false)
   const isLoading = ref(false)
-  let historyRestored = false
-
-  const restoreHistory = () => {
-    if (typeof window === 'undefined') return
-    try {
-      const saved = window.sessionStorage.getItem(CHAT_HISTORY_KEY)
-      if (!saved) return
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed)) messages.value = parsed
-    } catch (error) {
-      console.warn('Failed to restore chat history:', error)
-      window.sessionStorage.removeItem(CHAT_HISTORY_KEY)
-    }
-  }
-
-  watch(
-    messages,
-    (value) => {
-      if (!historyRestored || typeof window === 'undefined') return
-      window.sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(value))
-    },
-    { deep: true }
-  )
+  const isRestored = true // disable session restore; always start fresh
 
   // 기본 인사말 추가
   const initChat = () => {
-    if (!historyRestored) {
-      historyRestored = true
-      restoreHistory()
-    }
+    // always start fresh on page load (previous conversations are in localStorage via convo modal)
     if (messages.value.length === 0) {
       messages.value.push({
         id: Date.now(),
@@ -51,9 +24,6 @@ export const useChatStore = defineStore('chat', () => {
   // 대화 초기화
   const clearHistory = () => {
     messages.value = []
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem(CHAT_HISTORY_KEY)
-    }
     initChat()
   }
 
