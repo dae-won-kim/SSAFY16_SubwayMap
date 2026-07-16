@@ -3,6 +3,13 @@
   publish = "dist"
   command = "npm ci && npm run build"
 
+# 반드시 SPA redirect보다 위에 위치
+[[redirects]]
+  from = "/api/*"
+  to = "https://ssafy16-subwaymap-t3r8.onrender.com/api/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
