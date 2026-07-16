@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import { fetchChatbotResponse, fetchChatSessions, fetchChatSession } from './chatService'
+import { fetchChatbotResponse } from './chatService'
 
 export const useChatStore = defineStore('chat', () => {
   const CHAT_HISTORY_KEY = 'localhub-chat-history'
+  const CHAT_SESSIONS_KEY = 'localhub-chat-sessions'
 
   const messages = ref([])
   const isOpen = ref(false)
@@ -18,7 +19,13 @@ export const useChatStore = defineStore('chat', () => {
       const saved = window.sessionStorage.getItem(CHAT_HISTORY_KEY)
       if (!saved) return
       const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed)) messages.value = parsed
+      // 기존 배열 형식도 계속 복원할 수 있도록 호환 처리
+      if (Array.isArray(parsed)) {
+        messages.value = parsed
+      } else if (parsed && Array.isArray(parsed.messages)) {
+        messages.value = parsed.messages
+        activeSessionId.value = parsed.activeSessionId || null
+      }
     } catch (error) {
       console.warn('Failed to restore chat history:', error)
       window.sessionStorage.removeItem(CHAT_HISTORY_KEY)
@@ -26,10 +33,13 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   watch(
-    messages,
-    (value) => {
+    [messages, activeSessionId],
+    ([messageValue, sessionId]) => {
       if (!historyRestored || typeof window === 'undefined') return
-      window.sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(value))
+      window.sessionStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify({
+        messages: messageValue,
+        activeSessionId: sessionId
+      }))
     },
     { deep: true }
   )
@@ -61,29 +71,75 @@ export const useChatStore = defineStore('chat', () => {
     initChat()
   }
 
-  const loadSessions = async () => {
+  const loadSessions = () => {
+    if (typeof window === 'undefined') return
     try {
-      sessions.value = await fetchChatSessions()
+      const saved = window.localStorage.getItem(CHAT_SESSIONS_KEY)
+      const parsed = saved ? JSON.parse(saved) : []
+      sessions.value = Array.isArray(parsed)
+        ? parsed.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+        : []
     } catch (error) {
       console.warn('Failed to load chat sessions:', error)
+      sessions.value = []
+      window.localStorage.removeItem(CHAT_SESSIONS_KEY)
     }
   }
 
-  const loadSession = async (sessionId) => {
+  const loadSession = (sessionId) => {
     if (!sessionId) return
+    const session = sessions.value.find(item => item.session_id === sessionId)
+    if (!session) return
+
+    activeSessionId.value = session.session_id
+    messages.value = (session.messages || []).map(msg => ({
+      ...msg,
+      sources: msg.sources || []
+    }))
+  }
+
+  const archiveCurrentSession = () => {
+    if (typeof window === 'undefined') return false
+
+    const firstUserMessage = messages.value.find(msg => msg.role === 'user')
+    if (!firstUserMessage) return true
+
     try {
-      const session = await fetchChatSession(sessionId)
-      activeSessionId.value = session.session_id
-      messages.value = (session.messages || []).map((msg) => ({
-        id: msg.id,
-        role: msg.role,
-        text: msg.content,
-        timestamp: msg.created_at,
-        sources: []
-      }))
+      loadSessions()
+      const sessionId = activeSessionId.value || `session-${Date.now()}`
+      const now = new Date().toISOString()
+      const titleText = firstUserMessage.text.trim().replace(/\s+/g, ' ')
+      const existingIndex = sessions.value.findIndex(item => item.session_id === sessionId)
+      const existingSession = existingIndex >= 0 ? sessions.value[existingIndex] : null
+      const archivedSession = {
+        session_id: sessionId,
+        title: titleText.length > 36 ? `${titleText.slice(0, 36)}…` : titleText,
+        created_at: existingSession?.created_at || now,
+        updated_at: now,
+        messages: messages.value.map(msg => ({ ...msg }))
+      }
+
+      if (existingIndex >= 0) {
+        sessions.value.splice(existingIndex, 1, archivedSession)
+      } else {
+        sessions.value.push(archivedSession)
+      }
+      sessions.value.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+      window.localStorage.setItem(CHAT_SESSIONS_KEY, JSON.stringify(sessions.value))
+      activeSessionId.value = sessionId
+      return true
     } catch (error) {
-      console.warn('Failed to load chat session:', error)
+      console.warn('Failed to archive current chat:', error)
+      return false
     }
+  }
+
+  // 현재 대화를 기록에 저장한 뒤 새 대화 시작
+  const startNewChat = () => {
+    if (!archiveCurrentSession()) return false
+    clearHistory()
+    loadSessions()
+    return true
   }
 
   // 메시지 전송
@@ -120,7 +176,6 @@ export const useChatStore = defineStore('chat', () => {
         sources: result.sources || []
       })
 
-      await loadSessions()
     } catch (err) {
       console.error('Error sending message:', err)
       messages.value.push({
@@ -143,6 +198,7 @@ export const useChatStore = defineStore('chat', () => {
     isLoading,
     initChat,
     clearHistory,
+    startNewChat,
     sendMessage,
     loadSessions,
     loadSession

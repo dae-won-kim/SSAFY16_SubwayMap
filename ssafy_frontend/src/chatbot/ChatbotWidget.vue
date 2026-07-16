@@ -72,6 +72,16 @@ const requestClearHistory = () => {
   showClearConfirm.value = true
 }
 
+const handleStartNewChat = () => {
+  if (chatStore.isLoading) return
+  showClearConfirm.value = false
+  showHistoryPanel.value = false
+
+  if (!chatStore.startNewChat()) {
+    console.warn('새 채팅을 시작하기 전에 현재 대화를 저장하지 못했습니다.')
+  }
+}
+
 const cancelClearHistory = () => {
   showClearConfirm.value = false
 }
@@ -160,6 +170,17 @@ const handleSourceClick = (source) => {
             </div>
           </div>
           <div class="chat-header-actions">
+            <button
+              v-if="!showHistoryPanel"
+              class="chat-action-btn new-chat-btn"
+              :disabled="chatStore.isLoading"
+              @click="handleStartNewChat"
+              title="새 채팅 시작"
+              aria-label="새 채팅 시작"
+            >
+              ＋
+            </button>
+
             <button
               v-if="!showHistoryPanel"
               class="chat-action-btn"
@@ -456,6 +477,11 @@ const handleSourceClick = (source) => {
 
 .close-btn {
   font-size: 12px;
+}
+
+.new-chat-btn {
+  font-size: 19px;
+  font-weight: 500;
 }
 
 .chat-action-btn:disabled {
