@@ -199,7 +199,8 @@ export const useChatStore = defineStore('chat', () => {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream, application/json'
         },
         body: JSON.stringify({
           message: userText,
@@ -214,33 +215,19 @@ export const useChatStore = defineStore('chat', () => {
 
       const contentType = response.headers.get('content-type') || ''
       if (contentType.includes('text/event-stream')) {
-        if (!response.body) throw new Error('스트리밍 응답 본문이 없습니다.')
+        // Netlify 프록시는 SSE 청크를 합치거나 버퍼링할 수 있다. 응답을 전부
+        // 받은 뒤 data 줄 단위로 처리하면 브라우저별 청크 경계 차이를 피할 수 있다.
+        const responseText = await response.text()
+        const dataLines = responseText
+          .replace(/\r\n?/g, '\n')
+          .split('\n')
+          .filter(line => line.startsWith('data:'))
 
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        const processEvent = (eventText) => {
-          const dataText = eventText
-            .split('\n')
-            .filter(line => line.startsWith('data:'))
-            .map(line => line.slice(5).trim())
-            .join('')
-          if (!dataText || dataText === '[DONE]') return
+        for (const line of dataLines) {
+          const dataText = line.slice(5).trim()
+          if (!dataText || dataText === '[DONE]') continue
           applyResponseData(JSON.parse(dataText))
         }
-
-        while (true) {
-          const { value, done } = await reader.read()
-          buffer += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n')
-
-          const events = buffer.split('\n\n')
-          buffer = events.pop() || ''
-          events.forEach(processEvent)
-
-          if (done) break
-        }
-        if (buffer.trim()) processEvent(buffer)
       } else {
         const result = await response.json()
         applyResponseData({
