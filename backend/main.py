@@ -43,6 +43,19 @@ def _seed_attractions_from_json():
 
 app = FastAPI(title="LocalHub REST API Server")
 
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+def root():
+    return {
+        "status": "ok",
+        "service": "LocalHub REST API",
+        "docs": "/docs",
+    }
+
+
+@app.get("/health", include_in_schema=False)
+def health():
+    return {"status": "ok"}
+    
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
