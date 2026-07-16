@@ -1,6 +1,13 @@
 import axios from 'axios'
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const configuredChatApiUrl = import.meta.env.VITE_CHAT_API_URL?.trim()
+
+export const CHAT_API_URL = configuredChatApiUrl || (
+  import.meta.env.PROD
+    ? 'https://ssafy16-subwaymap-t3r8.onrender.com/api/chat'
+    : '/api/chat'
+)
 
 export const api = axios.create({
   baseURL: configuredBaseUrl || '/api',

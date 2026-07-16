@@ -1,8 +1,9 @@
 import axios from 'axios'
+import { CHAT_API_URL } from '@/api'
 
 export async function fetchChatbotResponse(message, history = [], sessionId = null) {
   try {
-    const response = await axios.post('/api/chat', {
+    const response = await axios.post(CHAT_API_URL, {
       message,
       history,
       session_id: sessionId

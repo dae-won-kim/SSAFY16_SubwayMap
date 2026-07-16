@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { CHAT_API_URL } from '@/api'
 
 export const useChatStore = defineStore('chat', () => {
   const CHAT_HISTORY_KEY = 'localhub-chat-history'
@@ -196,7 +197,7 @@ export const useChatStore = defineStore('chat', () => {
         session_id: sessionId
       }))
 
-      const response = await fetch('/api/chat', {
+      const response = await fetch(CHAT_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
