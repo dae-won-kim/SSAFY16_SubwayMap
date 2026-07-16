@@ -1,7 +1,8 @@
 <script setup>
+import { ref, watch } from 'vue'
 import { getCategoryName } from '@/utils/category'
 
-defineProps({
+const props = defineProps({
   attraction: {
     type: Object,
     required: true
@@ -12,8 +13,17 @@ defineProps({
   }
 })
 
-const getDefaultImage = () => {
-  return 'https://via.placeholder.com/300x200?text=No+Image'
+const imageFailed = ref(false)
+
+watch(
+  () => props.attraction.first_image,
+  () => {
+    imageFailed.value = false
+  }
+)
+
+const handleImageError = () => {
+  imageFailed.value = true
 }
 
 const formatAddress = (addr = '') => {
@@ -30,10 +40,15 @@ const formatAddress = (addr = '') => {
     <!-- 이미지 -->
     <div class="card-image">
       <img
-        :src="attraction.first_image || getDefaultImage()"
+        v-if="attraction.first_image && !imageFailed"
+        :src="attraction.first_image"
         :alt="attraction.title"
-        @error="(e) => (e.target.src = getDefaultImage())"
+        @error="handleImageError"
       />
+      <div v-else class="image-fallback">
+        <span aria-hidden="true">🗺️</span>
+        <span>이미지 없음</span>
+      </div>
       <div v-if="distance" class="distance-badge">
         {{ Math.round(distance * 100) / 100 }} km
       </div>
@@ -90,6 +105,22 @@ const formatAddress = (addr = '') => {
   height: 100%;
   object-fit: cover;
   transition: transform 0.3s ease;
+}
+
+.image-fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-content: center;
+  gap: 6px;
+  background: #eef4f5;
+  color: #789;
+  text-align: center;
+  font-size: 13px;
+}
+
+.image-fallback span:first-child {
+  font-size: 32px;
 }
 
 .attraction-card:hover .card-image img {

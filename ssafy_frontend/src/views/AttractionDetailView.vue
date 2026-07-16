@@ -21,6 +21,7 @@ const categoryName = computed(() => getCategoryName(attraction.value?.lcls_systm
 let map = null
 let marker = null
 const mapError = ref('')
+const detailImageFailed = ref(false)
 
 const createMap = (position) => {
   const container = document.getElementById('kakao-map')
@@ -100,6 +101,7 @@ onMounted(async () => {
 watch(() => route.params.id, () => {
   map = null
   marker = null
+  detailImageFailed.value = false
   renderMap()
 })
 </script>
@@ -114,10 +116,11 @@ watch(() => route.params.id, () => {
       <article v-if="attraction" class="detail-card">
         <div class="detail-image-wrap">
           <img
-            v-if="attraction.first_image"
+            v-if="attraction.first_image && !detailImageFailed"
             class="detail-image"
             :src="attraction.first_image"
             :alt="attraction.title"
+            @error="detailImageFailed = true"
           />
           <div v-else class="image-placeholder">이미지가 없습니다</div>
         </div>

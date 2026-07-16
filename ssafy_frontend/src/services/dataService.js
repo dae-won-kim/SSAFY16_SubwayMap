@@ -24,6 +24,13 @@ const PAGE_SIZE = 200
 const dataCache = new Map()
 let allLocationsPromise = null
 
+function normalizeImageUrl(value = '') {
+  const url = String(value).trim()
+  if (!url) return ''
+
+  return url.replace(/^http:\/\//i, 'https://')
+}
+
 // 백엔드 Location 응답을 화면에서 공통으로 사용하는 장소 형태로 변환한다.
 function normalizeItem(item) {
   return {
@@ -33,7 +40,7 @@ function normalizeItem(item) {
     title: item.name ?? '',
     addr1: item.address ?? '',
     addr2: '',
-    first_image: item.description ?? '',
+    first_image: normalizeImageUrl(item.description),
     lcls_systm1: item.category ?? '',
     gu_name: item.gu_name ?? '',
     mapx: item.mapx ?? '',
