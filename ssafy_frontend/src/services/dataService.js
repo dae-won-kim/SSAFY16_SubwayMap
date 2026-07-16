@@ -10,10 +10,21 @@ const DATA_TYPES = {
   SHOPPING: 'shopping'
 }
 
+const CATEGORY_BY_TYPE = {
+  [DATA_TYPES.ATTRACTION]: '관광지',
+  [DATA_TYPES.CULTURE]: '문화시설',
+  [DATA_TYPES.FESTIVAL]: '축제공연행사',
+  [DATA_TYPES.TRAVEL_COURSE]: '여행코스',
+  [DATA_TYPES.SPORTS]: '레포츠',
+  [DATA_TYPES.ACCOMMODATION]: '숙박',
+  [DATA_TYPES.SHOPPING]: '쇼핑'
+}
+
 const PAGE_SIZE = 200
 const dataCache = new Map()
+let allLocationsPromise = null
 
-// 백엔드 Location 응답을 기존 화면에서 사용하는 관광지 형태로 변환한다.
+// 백엔드 Location 응답을 화면에서 공통으로 사용하는 장소 형태로 변환한다.
 function normalizeItem(item) {
   return {
     id: item.id,
@@ -30,7 +41,7 @@ function normalizeItem(item) {
   }
 }
 
-async function fetchAllAttractions() {
+async function fetchAllLocations() {
   const items = []
   let skip = 0
 
@@ -49,17 +60,29 @@ async function fetchAllAttractions() {
   return { items }
 }
 
+async function getAllLocations() {
+  if (!allLocationsPromise) {
+    allLocationsPromise = fetchAllLocations().catch(error => {
+      allLocationsPromise = null
+      throw error
+    })
+  }
+  return allLocationsPromise
+}
+
 export async function loadData(type) {
   if (dataCache.has(type)) {
     return dataCache.get(type)
   }
 
   try {
-    // 현재 백엔드는 locations를 관광지 API 하나로 제공한다.
-    // 지원하지 않는 기존 JSON 분류는 빈 목록으로 유지한다.
-    const data = type === DATA_TYPES.ATTRACTION
-      ? await fetchAllAttractions()
-      : { items: [] }
+    const category = CATEGORY_BY_TYPE[type]
+    const allLocations = await getAllLocations()
+    const data = {
+      items: category
+        ? allLocations.items.filter(item => item.lcls_systm1 === category)
+        : []
+    }
 
     dataCache.set(type, data)
     return data
@@ -70,14 +93,28 @@ export async function loadData(type) {
 }
 
 export async function loadAllData() {
-  const attractionData = await loadData(DATA_TYPES.ATTRACTION)
+  const allLocations = await getAllLocations()
 
   return Object.fromEntries(
     Object.values(DATA_TYPES).map(type => [
       type,
-      type === DATA_TYPES.ATTRACTION ? attractionData : { items: [] }
+      {
+        items: allLocations.items.filter(
+          item => item.lcls_systm1 === CATEGORY_BY_TYPE[type]
+        )
+      }
     ])
   )
+}
+
+export async function loadDataStats() {
+  try {
+    const response = await api.get('/attractions/stats')
+    return response.data
+  } catch (error) {
+    console.error('Error loading location statistics:', error)
+    throw new Error(getApiErrorMessage(error))
+  }
 }
 
 export async function getItems(type) {

@@ -46,9 +46,7 @@ watch(
 watch(
   () => chatStore.isOpen,
   (val) => {
-    if (val) {
-      scrollToBottom()
-    }
+    if (val) scrollToBottom()
   }
 )
 
@@ -272,7 +270,7 @@ const handleSourceClick = (source) => {
             <div class="chat-bubble-container">
               <div class="chat-bubble" v-html="renderMarkdown(msg.text)"></div>
 
-              <!-- 출처 명소 목록 (RAG 결과물) -->
+              <!-- 출처 지역 정보 목록 (RAG 결과물) -->
               <div
                 v-if="msg.sources && msg.sources.length > 0"
                 class="chat-sources-container"
@@ -294,7 +292,9 @@ const handleSourceClick = (source) => {
                     <div v-else class="source-thumb-empty">🗺️</div>
                     <div class="source-info">
                       <span class="source-name">{{ src.title }}</span>
-                      <span class="source-category">{{ src.contentType || '명소' }}</span>
+                      <span class="source-category">
+                        {{ src.category || src.contentType || '지역 정보' }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -928,4 +928,5 @@ const handleSourceClick = (source) => {
     border: none;
   }
 }
+
 </style>

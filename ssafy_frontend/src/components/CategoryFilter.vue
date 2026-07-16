@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useCommonStore } from '@/stores/commonStore'
 import { useDataStore } from '@/stores/dataStore'
-import { getCategoryName } from '@/utils/category'
+import { CATEGORY_ORDER, getCategoryIcon, getCategoryName } from '@/utils/category'
 
 const commonStore = useCommonStore()
 const dataStore = useDataStore()
@@ -10,7 +10,7 @@ const dataStore = useDataStore()
 const categories = computed(() => {
   const counts = new Map()
 
-  dataStore.attractions.forEach(item => {
+  dataStore.allItems.forEach(item => {
     const code = item.lcls_systm1
     if (!code) return
     counts.set(code, (counts.get(code) || 0) + 1)
@@ -19,9 +19,14 @@ const categories = computed(() => {
   return Array.from(counts, ([code, count]) => ({
     code,
     label: getCategoryName(code),
-    icon: '📍',
+    icon: getCategoryIcon(code),
     count
-  }))
+  })).sort((a, b) => {
+    const aIndex = CATEGORY_ORDER.indexOf(a.code)
+    const bIndex = CATEGORY_ORDER.indexOf(b.code)
+    return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+      (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex)
+  })
 })
 
 const toggleCategory = (code) => {

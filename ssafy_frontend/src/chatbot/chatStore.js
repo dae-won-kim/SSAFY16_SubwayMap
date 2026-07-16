@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import { fetchChatbotResponse } from './chatService'
 
 export const useChatStore = defineStore('chat', () => {
   const CHAT_HISTORY_KEY = 'localhub-chat-history'
@@ -156,7 +155,39 @@ export const useChatStore = defineStore('chat', () => {
       timestamp: new Date()
     })
 
+    // 첫 요청 전송 시 로딩 상태 활성화 (UI 상의 '...' 타이핑 표시 활성화)
     isLoading.value = true
+
+    const aiMessageId = Date.now() + 2
+    let isAiMessageAdded = false
+
+    const getAiMessage = () => {
+      if (!isAiMessageAdded) {
+        messages.value.push({
+          id: aiMessageId,
+          role: 'assistant',
+          text: '',
+          timestamp: new Date(),
+          sources: []
+        })
+        isAiMessageAdded = true
+        isLoading.value = false
+      }
+      return messages.value.find(message => message.id === aiMessageId)
+    }
+
+    const applyResponseData = (data) => {
+      if (data.error) throw new Error(data.error)
+
+      if (data.text) {
+        const aiMessage = getAiMessage()
+        if (aiMessage) aiMessage.text += data.text
+      }
+      if (Array.isArray(data.sources)) {
+        const aiMessage = getAiMessage()
+        if (aiMessage) aiMessage.sources = data.sources
+      }
+    }
 
     try {
       const apiHistory = messages.value.slice(0, -1).map(msg => ({
@@ -165,26 +196,76 @@ export const useChatStore = defineStore('chat', () => {
         session_id: sessionId
       }))
 
-      const result = await fetchChatbotResponse(userText, apiHistory, sessionId)
-      const aiReply = result.reply || '응답을 받지 못했습니다.'
-
-      messages.value.push({
-        id: Date.now() + 2,
-        role: 'assistant',
-        text: aiReply,
-        timestamp: new Date(),
-        sources: result.sources || []
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: userText,
+          history: apiHistory,
+          session_id: sessionId
+        })
       })
 
+      if (!response.ok) {
+        throw new Error('챗봇 응답 연결 실패')
+      }
+
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('text/event-stream')) {
+        if (!response.body) throw new Error('스트리밍 응답 본문이 없습니다.')
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        const processEvent = (eventText) => {
+          const dataText = eventText
+            .split('\n')
+            .filter(line => line.startsWith('data:'))
+            .map(line => line.slice(5).trim())
+            .join('')
+          if (!dataText || dataText === '[DONE]') return
+          applyResponseData(JSON.parse(dataText))
+        }
+
+        while (true) {
+          const { value, done } = await reader.read()
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n')
+
+          const events = buffer.split('\n\n')
+          buffer = events.pop() || ''
+          events.forEach(processEvent)
+
+          if (done) break
+        }
+        if (buffer.trim()) processEvent(buffer)
+      } else {
+        const result = await response.json()
+        applyResponseData({
+          text: result.reply || '응답을 받지 못했습니다.',
+          sources: result.sources || []
+        })
+      }
+
+      if (!isAiMessageAdded) {
+        const aiMessage = getAiMessage()
+        if (aiMessage) {
+          aiMessage.text = '응답을 받지 못했습니다.'
+        }
+      } else {
+        const aiMessage = messages.value.find(message => message.id === aiMessageId)
+        if (aiMessage && !aiMessage.text) {
+          aiMessage.text = '응답을 받지 못했습니다.'
+        }
+      }
     } catch (err) {
       console.error('Error sending message:', err)
-      messages.value.push({
-        id: Date.now() + 3,
-        role: 'assistant',
-        text: `죄송합니다. 오류가 발생하여 응답을 가져올 수 없습니다. 😢\n\n오류 내용: *${err.message}*`,
-        timestamp: new Date(),
-        sources: []
-      })
+      const targetMsg = getAiMessage()
+      if (targetMsg) {
+        targetMsg.text = `죄송합니다. 오류가 발생하여 응답을 가져올 수 없습니다. 😢\n\n오류 내용: *${err.message}*`
+      }
     } finally {
       isLoading.value = false
     }
@@ -204,4 +285,3 @@ export const useChatStore = defineStore('chat', () => {
     loadSession
   }
 })
-

@@ -113,8 +113,8 @@ onMounted(() => {
   dataStore.loadAllDataAction()
 })
 
-const filteredAttractions = computed(() => {
-  let items = dataStore.attractions
+const filteredLocations = computed(() => {
+  let items = dataStore.allItems
 
   if (commonStore.selectedCategory) {
     items = items.filter(
@@ -136,8 +136,8 @@ const filteredAttractions = computed(() => {
   return items
 })
 
-const sortedAttractions = computed(() => {
-  return [...filteredAttractions.value].sort((a, b) => {
+const sortedLocations = computed(() => {
+  return [...filteredLocations.value].sort((a, b) => {
     const getField = (item) => {
       if (sortOption.value === 'category') {
         return item.lcls_systm1 || ''
@@ -157,13 +157,13 @@ const sortedAttractions = computed(() => {
 })
 
 const totalPages = computed(() => {
-  return Math.ceil(sortedAttractions.value.length / pageSize)
+  return Math.ceil(sortedLocations.value.length / pageSize)
 })
 
-const paginatedAttractions = computed(() => {
+const paginatedLocations = computed(() => {
   const start = (currentPage.value - 1) * pageSize
   const end = start + pageSize
-  return sortedAttractions.value.slice(start, end)
+  return sortedLocations.value.slice(start, end)
 })
 
 const handlePageChange = (page) => {
@@ -206,7 +206,7 @@ const toggleSortDirection = () => {
               <div>
                 <h2 class="result-title">검색 결과</h2>
                 <p class="result-count">
-                  총 <strong>{{ filteredAttractions.length }}</strong>개의 관광지
+                  총 <strong>{{ filteredLocations.length }}</strong>개의 서울 지역 정보
                 </p>
               </div>
 
@@ -238,16 +238,16 @@ const toggleSortDirection = () => {
             <p>❌ {{ dataStore.error }}</p>
           </div>
 
-          <div v-else-if="filteredAttractions.length === 0" class="empty">
+          <div v-else-if="filteredLocations.length === 0" class="empty">
             <p>검색 결과가 없습니다.</p>
             <p class="empty-hint">다른 키워드나 필터를 시도해보세요.</p>
           </div>
 
           <div v-else class="attractions-grid">
             <AttractionCard
-              v-for="attraction in paginatedAttractions"
-              :key="attraction.contentid"
-              :attraction="attraction"
+              v-for="location in paginatedLocations"
+              :key="location.contentid"
+              :attraction="location"
             />
           </div>
 

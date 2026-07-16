@@ -1,13 +1,22 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from '@/chatbot/chatStore'
 import { usePostStore } from '@/stores/postStore'
+import { loadDataStats } from '@/services/dataService'
+import { CATEGORY_ORDER, getCategoryIcon, getCategoryName } from '@/utils/category'
 import LayoutBase from '@/components/LayoutBase.vue'
 
 const router = useRouter()
 const chatStore = useChatStore()
 const postStore = usePostStore()
+const dataStats = ref({
+  total: 0,
+  districts: 0,
+  categories: 0,
+  imageRate: '0.0',
+  categoryCounts: {}
+})
 
 const recentPosts = computed(() => postStore.posts.slice(0, 5))
 
@@ -20,14 +29,45 @@ const formatDate = (date) => {
 
 onMounted(() => {
   postStore.loadPosts()
+  loadDataStats()
+    .then(stats => {
+      dataStats.value = {
+        total: stats.total || 0,
+        districts: stats.districts || 0,
+        categories: stats.category_count || 0,
+        imageRate: Number(stats.image_rate || 0).toFixed(1),
+        categoryCounts: Object.fromEntries(
+          (stats.categories || []).map(item => [item.category, item.count])
+        )
+      }
+    })
+    .catch(error => {
+      console.error('Failed to load LocalHub statistics:', error)
+    })
 })
+
+const categoryStats = computed(() => {
+  return Object.entries(dataStats.value.categoryCounts).map(([category, count]) => ({
+    category,
+    label: getCategoryName(category),
+    icon: getCategoryIcon(category),
+    count
+  })).sort((a, b) => {
+    const aIndex = CATEGORY_ORDER.indexOf(a.category)
+    const bIndex = CATEGORY_ORDER.indexOf(b.category)
+    return (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+      (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex)
+  })
+})
+
+const formatNumber = value => new Intl.NumberFormat('ko-KR').format(value)
 
 const features = [
   {
     id: 1,
     icon: '🚇',
-    title: '역세권 관광지 검색',
-    description: '지하철역 이름을 입력하면 근처 1km 내 관광지를 한눈에 확인할 수 있습니다.',
+    title: '역세권 지역 정보 검색',
+    description: '지하철역이나 장소명을 입력해 관광지, 문화시설, 쇼핑, 숙박 등 주변 정보를 확인할 수 있습니다.',
     action: () => router.push('/attractions')
   },
   {
@@ -41,7 +81,7 @@ const features = [
     id: 3,
     icon: '🤖',
     title: 'AI 챗봇 비서',
-    description: '궁금한 점을 AI가 답해줄거에요. 즉시 맞춤정보를 얻을 수 있습니다.',
+    description: '관광지부터 레포츠, 문화시설, 축제까지 궁금한 서울 정보를 AI에게 물어보세요.',
     action: () => {
       chatStore.isOpen = true
     }
@@ -60,7 +100,8 @@ const features = [
             지하철역 중심으로 찾다
           </h1>
           <p class="banner-subtitle">
-            한국관광공사 데이터 기반 783개의 서울 관광지 탐색 + 익명 커뮤니티
+            한국관광공사 데이터 기반 {{ formatNumber(dataStats.total) }}개의 서울 지역 정보와
+            {{ dataStats.categories }}개 카테고리 탐색 + 익명 커뮤니티
           </p>
           <button class="banner-btn" @click="router.push('/attractions')">
             지금 탐색하기 →
@@ -115,20 +156,31 @@ const features = [
         <h2 class="section-title">LocalHub 데이터 현황</h2>
         <div class="stats-grid">
           <div class="stat-item">
-            <div class="stat-number">783</div>
-            <div class="stat-label">관광지 데이터</div>
+            <div class="stat-number">{{ formatNumber(dataStats.total) }}</div>
+            <div class="stat-label">서울 지역 데이터</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">25</div>
+            <div class="stat-number">{{ dataStats.districts }}</div>
             <div class="stat-label">자치구</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">4</div>
+            <div class="stat-number">{{ dataStats.categories }}</div>
             <div class="stat-label">카테고리</div>
           </div>
           <div class="stat-item">
-            <div class="stat-number">91.7%</div>
+            <div class="stat-number">{{ dataStats.imageRate }}%</div>
             <div class="stat-label">이미지 보유율</div>
+          </div>
+        </div>
+        <div class="category-summary" aria-label="카테고리별 데이터 수">
+          <div
+            v-for="category in categoryStats"
+            :key="category.category"
+            class="category-stat"
+          >
+            <span class="category-stat-icon">{{ category.icon }}</span>
+            <span class="category-stat-label">{{ category.label }}</span>
+            <strong>{{ formatNumber(category.count) }}</strong>
           </div>
         </div>
       </section>
@@ -136,7 +188,7 @@ const features = [
       <!-- CTA 섹션 -->
       <section class="cta">
         <h2>지금 바로 시작해보세요</h2>
-        <p>가장 가까운 지하철역에서 찾을 수 있는 숨은 명소들을 발견하세요.</p>
+        <p>가장 가까운 지하철역에서 관광, 문화, 축제, 레포츠, 쇼핑 정보를 발견하세요.</p>
         <button class="cta-btn" @click="router.push('/attractions')">
           지하철역으로 검색하기
         </button>
@@ -371,6 +423,39 @@ const features = [
   font-size: 14px;
   color: #666;
   font-weight: 500;
+}
+
+.category-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.category-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: white;
+  color: #555;
+  font-size: 13px;
+}
+
+.category-stat-icon {
+  font-size: 18px;
+}
+
+.category-stat-label {
+  flex: 1;
+}
+
+.category-stat strong {
+  color: #138496;
 }
 
 /* CTA 섹션 */

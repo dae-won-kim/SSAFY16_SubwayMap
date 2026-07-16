@@ -1,7 +1,7 @@
 <script setup>
 const navigation = [
   { label: '홈', to: '/' },
-  { label: '관광지 탐색', to: '/attractions' },
+  { label: '서울 정보 탐색', to: '/attractions' },
   { label: '익명 게시판', to: '/posts' }
 ]
 </script>

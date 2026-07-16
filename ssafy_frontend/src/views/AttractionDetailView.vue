@@ -11,7 +11,7 @@ const router = useRouter()
 const dataStore = useDataStore()
 
 const attraction = computed(() => {
-  return dataStore.attractions.find(
+  return dataStore.allItems.find(
     (item) => String(item.contentid) === String(route.params.id)
   )
 })
@@ -91,7 +91,7 @@ const goBack = () => {
 }
 
 onMounted(async () => {
-  if (dataStore.attractions.length === 0) {
+  if (dataStore.allItems.length === 0) {
     await dataStore.loadAllDataAction()
   }
   await renderMap()
